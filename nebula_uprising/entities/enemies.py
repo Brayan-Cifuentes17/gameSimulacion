@@ -154,57 +154,77 @@ class BossFinalAgent(Entity):
         self.corruption_level = 0
     
     def think_and_act(self, player, game_state):
-        """Sistema de decisión basado en el contexto"""
-        player_distance = abs(self.x - player.x)
-        health_percentage = self.health / self.max_health
-        
-        # Cambiar comportamiento según el contexto
-        if health_percentage < 0.3:
-            self.behavior_state = "aggressive"
-            self.speed = 4
-        elif health_percentage < 0.6:
-            self.behavior_state = "balanced"
-            self.speed = 3
-        else:
-            self.behavior_state = "defensive"
-            self.speed = 2
-        
-        # Movimiento inteligente
-        if self.behavior_state == "aggressive":
-            # Perseguir al jugador
-            if player.x < self.x:
-                self.x -= self.speed
+            """Sistema de decisión basado en el contexto"""
+            player_distance = abs(self.x - player.x)
+            health_percentage = self.health / self.max_health
+            
+            #Verificar si el jefe llegó a la posición del jugador o muy abajo
+            if self.y >= player.y - 50:  # Si el jefe está muy cerca o debajo del jugador
+                # El jefe ha alcanzado las colonias - GAME OVER
+                game_state.game_over = True
+                game_state.narrative_system.queue_message("colony_breached")
+                return
+            
+            # Verificar si el jefe está muy abajo en la pantalla
+            if self.y >= SCREEN_HEIGHT - 150:
+                # El jefe está peligrosamente cerca de las colonias
+                game_state.game_over = True
+                game_state.narrative_system.queue_message("colony_breached")
+                return
+            
+            # Cambiar comportamiento según el contexto
+            if health_percentage < 0.3:
+                self.behavior_state = "aggressive"
+                self.speed = 6
+                # En modo agresivo, el jefe también avanza hacia abajo
+                self.y += 0.5
+            elif health_percentage < 0.6:
+                self.behavior_state = "balanced"
+                self.speed = 5
+                # Avance moderado
+                self.y += 0.3
             else:
-                self.x += self.speed
-        elif self.behavior_state == "defensive":
-            # Mantener distancia
-            if player_distance < 200:
+                self.behavior_state = "defensive"
+                self.speed = 3
+                # Avance lento
+                self.y += 0.1
+            
+            # Movimiento inteligente horizontal
+            if self.behavior_state == "aggressive":
+                # Perseguir al jugador
                 if player.x < self.x:
-                    self.x += self.speed
-                else:
                     self.x -= self.speed
-                    
-        #Limitar posicion del jefe dentro de la pantalla
-        self.x = max(0, min(self.x, SCREEN_WIDTH - self.width))
-        
-        # Sistema de ataque
-        self.attack_timer += 1
-        attack_frequency = 120 if self.behavior_state == "defensive" else 60
-        
-        if self.attack_timer >= attack_frequency:
-            self.launch_missile(player)
-            self.attack_timer = 0
-        
-        # Actualizar misiles
-        for missile in self.missiles[:]:
-            missile.update(player)
-            if missile.y > SCREEN_HEIGHT:
-                self.missiles.remove(missile)
-        
-        # Aumentar corrupción con el tiempo
-        self.corruption_level = min(100, self.corruption_level + 0.1)
-        
-        super().update()
+                else:
+                    self.x += self.speed
+            elif self.behavior_state == "defensive":
+                # Mantener distancia
+                if player_distance < 200:
+                    if player.x < self.x:
+                        self.x += self.speed
+                    else:
+                        self.x -= self.speed
+                        
+            # Limitar posición del jefe dentro de la pantalla
+            self.x = max(0, min(self.x, SCREEN_WIDTH - self.width))
+            
+            # Sistema de ataque
+            self.attack_timer += 1
+            attack_frequency = 120 if self.behavior_state == "defensive" else 60
+            
+            if self.attack_timer >= attack_frequency:
+                self.launch_missile(player)
+                self.attack_timer = 0
+            
+            # Actualizar misiles
+            for missile in self.missiles[:]:
+                missile.update(player)
+                if missile.y > SCREEN_HEIGHT:
+                    self.missiles.remove(missile)
+            
+            # Aumentar corrupción con el tiempo
+            self.corruption_level = min(100, self.corruption_level + 0.1)
+            
+            super().update()
     
     def launch_missile(self, player):
         """Lanzar misil teledirigido"""
@@ -264,7 +284,7 @@ class BossFinalAgent(Entity):
             corruption_text = font.render("CORRUPCIÓN DETECTADA", True, RED)
             screen.blit(corruption_text, (bar_x, bar_y + 20))
     
-    def take_damage(self, damage=1):
+    def take_damage(self, damage=2):
         """Recibir daño"""
         self.health -= damage
         return self.health <= 0

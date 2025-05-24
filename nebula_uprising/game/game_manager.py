@@ -251,10 +251,11 @@ class GameManager:
                 enemy.update()
             
             # Aplicar factor de tiempo lento
-            if self.player.slow_time and not isinstance(enemy, BossFinalAgent):
-                enemy.y += 1 * time_factor
-            else:
-                enemy.y += 1
+            if not isinstance(enemy, BossFinalAgent):
+                if self.player.slow_time:
+                    enemy.y += 0.5 * time_factor
+                else:
+                    enemy.y += 0.5
             
             # Eliminar enemigos que salen de la pantalla
             if enemy.y > SCREEN_HEIGHT and not isinstance(enemy, BossFinalAgent):

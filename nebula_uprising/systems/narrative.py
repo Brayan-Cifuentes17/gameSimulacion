@@ -33,7 +33,8 @@ class NarrativeSystem:
             "network_interference": "Interferencia anómala... ¿Otros sistemas están... escuchando?",
             "victory": "Núcleo XARN neutralizado. Pero esto es solo el comienzo, Comandante.",
             "defeat": "Sistemas críticos dañados. Protocolo de evacuación activado.",
-            "inactivity": "Rendimiento inaceptable. Protocolo de retirada activado."
+            "inactivity": "Rendimiento inaceptable. Protocolo de retirada activado.",
+            "colony_breached": "¡CÓDIGO ROJO! XARN ha alcanzado las colonias. Zeta-9 está perdido..."
         }
         
         self.fragments_collected = 0

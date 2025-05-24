@@ -20,27 +20,27 @@ class WaveQueue:
         """Definir todas las oleadas del juego"""
         # Oleada 1: Reconocimiento XARN
         wave1 = {
-            "enemies": [("drone", 5)],
-            "duration": 800,
-            "spawn_rate": 120,
+            "enemies": [("drone", 40)],
+            "duration": 3600,
+            "spawn_rate": 50,
             "narrative": "first_wave",
             "name": "Reconocimiento XARN"
         }
         
         # Oleada 2: Drones Adaptativos
         wave2 = {
-            "enemies": [("drone", 3), ("markov", 2)],
-            "duration": 1000,
-            "spawn_rate": 100,
+            "enemies": [("drone", 50), ("markov", 14)],
+            "duration": 3600,
+            "spawn_rate": 50,
             "narrative": "markov_enemy",
             "name": "Protocolo Adaptativo"
         }
         
         # Oleada 3: Asalto Coordinado
         wave3 = {
-            "enemies": [("drone", 2), ("markov", 4)],
-            "duration": 1200,
-            "spawn_rate": 80,
+            "enemies": [("drone", 30), ("markov", 29)],
+            "duration": 3600,
+            "spawn_rate": 30,
             "narrative": None,
             "name": "Asalto Coordinado"
         }

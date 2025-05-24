@@ -60,7 +60,7 @@ class CollisionSystem:
         from entities.enemies import BossFinalAgent
         
         if isinstance(enemy, BossFinalAgent):
-            enemy.health -= 1
+            enemy.health -= 5
             if enemy.health <= 0:
                 self.game.enemies.remove(enemy)
                 self.game.score += 1000
@@ -111,7 +111,7 @@ class CollisionSystem:
             self.game.narrative_system.queue_message("powerup_slow")
         elif power_up.power_type == "shield":
             self.game.player.shield = True
-            self.game.player.shield_duration = 240
+            self.game.player.shield_duration = 800
             self.game.narrative_system.queue_message("powerup_shield")
         elif power_up.power_type == "extra_life":
             self.game.player.health = min(self.game.player.max_health, 
