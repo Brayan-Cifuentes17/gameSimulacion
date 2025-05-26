@@ -282,6 +282,11 @@ class GameManager:
                 for drone in drones_to_remove:
                     if drone in boss.spawned_drones:
                         boss.spawned_drones.remove(drone)
+                        # --- NUEVO: Probabilidad de soltar power-up ---
+                        powerup_type = self.monte_carlo_powerup()
+                        if powerup_type:
+                            powerup = PowerUp(drone.x, drone.y, powerup_type)
+                            self.power_ups.append(powerup)
                 for bullet in bullets_to_remove:
                     if bullet in self.player.bullets:
                         self.player.bullets.remove(bullet)
