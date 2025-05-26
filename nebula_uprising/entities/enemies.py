@@ -120,9 +120,12 @@ class MarkovEnemy(Entity):
             bullet.update()
             if bullet.y > SCREEN_HEIGHT:
                 self.bullets.remove(bullet)
-        
+
+        # Mantener dentro de los límites de la pantalla
+        self.x = max(0, min(self.x, SCREEN_WIDTH - self.width))
+
         super().update()
-    
+        
     def draw(self, screen):
         """Dibujar enemigo Markov con indicador de estado"""
         super().draw(screen)
@@ -209,7 +212,8 @@ class BossFinalAgent(Entity):
                     self.x -= self.speed
                     
         # Limitar posición del jefe dentro de la pantalla
-        self.x = max(0, min(self.x, SCREEN_WIDTH - self.width))
+        MARGIN = 30 
+        self.x = max(MARGIN, min(self.x, SCREEN_WIDTH - self.width - MARGIN))
         
         # Sistema de ataque
         self.attack_timer += 1

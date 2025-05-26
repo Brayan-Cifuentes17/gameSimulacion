@@ -29,14 +29,20 @@ class GameManager:
         self.wave_system = WaveQueue()
         self.narrative_system = NarrativeSystem()
         self.collision_system = CollisionSystem(self)
-        
+        self.wave_transition_timer = 0
+
+        #entre oleadas
+        self.showing_wave_transition = False
+        self.transition_duration = 180  # 3 segundos s
+        self.next_wave_name = ""
+
         # Estado del juego
         self.score = 0
         self.game_over = False
         self.victory = False
         self.paused = False
         
-        # NUEVO: Sistema de defensa de colonias
+        #Sistema de defensa de colonias
         self.colony_health = 100
         self.max_colony_health = 100
         self.colony_warning_shown = False
@@ -62,7 +68,7 @@ class GameManager:
         self.pseudo_random_sequence = [0.03, 0.18, 0.35, 0.62, 0.85, 0.97]
         self.pseudo_index = 0
         
-        # NUEVO: Control de fragmentos narrativos
+        #Control de fragmentos narrativos
         self.all_fragments_collected = False
         self.final_revelation_shown = False
         
@@ -105,7 +111,9 @@ class GameManager:
         
         if wave["spawn_rate"] < 0:  # Jefe final
             if not self.enemies:  # Solo generar si no hay enemigos
-                boss = BossFinalAgent(SCREEN_WIDTH // 2 - 40, 50)
+                boss_x = SCREEN_WIDTH // 2 - BOSS_WIDTH // 2
+                boss_y = 50  
+                boss = BossFinalAgent(boss_x, boss_y)
                 self.enemies.append(boss)
             return
         
@@ -274,12 +282,22 @@ class GameManager:
             self.colony_health = 0
             self.game_over = True
             self.narrative_system.queue_message("colony_destroyed")
+
+    def all_enemies_spawned(self):
+        """Verificar si se han generado todos los enemigos de la oleada actual"""
+        if not self.wave_system.current_wave:
+            return True
+        wave = self.wave_system.current_wave
+        for enemy_type, total in wave["enemies"]:
+            if self.enemies_spawned.get(enemy_type, 0) < total:
+                return False
+        return True
     
     def update(self, dt):
         """Actualizar el estado del juego"""
         if self.game_over or self.victory or self.paused:
             return
-        
+
         # Verificar inactividad
         if self.score == 0:
             self.inactivity_timer += 1
@@ -288,35 +306,45 @@ class GameManager:
                 self.narrative_system.queue_message("inactivity")
         else:
             self.inactivity_timer = 0
-        
-        # Factor de tiempo lento
-        time_factor = 0.5 if self.player.slow_time else 1.0
-        
-        # Actualizar sistemas
+
+        # Transición entre oleadas
+        if self.showing_wave_transition:
+            self.wave_transition_timer -= 1
+            if self.wave_transition_timer <= 0:
+                self.showing_wave_transition = False
+            return  # Pausar todo mientras se muestra el mensaje
+
+        # Actualizar jugador y sistema narrativo
         self.player.update()
         self.narrative_system.update()
-        
-        # Actualizar sistema de oleadas
-        wave_status = self.wave_system.update()
-        if wave_status == "wave_complete":
-            if len(self.enemies) == 0:  # Todos los enemigos derrotados
-                # Verificar si fue una oleada perfecta
-                if not self.player.damage_taken_this_wave:
-                    self.player.perfect_runs += 1
-                    if self.player.perfect_runs >= 2:
-                        self.narrative_system.xarn_data_unlocked = True
-                        self.unlock_story_fragment()
-                
-                self.player.damage_taken_this_wave = False
-                
-                if not self.wave_system.get_next_wave():
-                    self.victory = True
-                else:
-                    self.enemies_spawned = {}
-        
-        # Generar enemigos
+
+        # Comprobación de fin de oleada sin depender de duración
+        if len(self.enemies) == 0 and self.all_enemies_spawned():
+            # Verificar si fue una oleada perfecta
+            if not self.player.damage_taken_this_wave:
+                self.player.perfect_runs += 1
+                if self.player.perfect_runs >= 2:
+                    self.narrative_system.xarn_data_unlocked = True
+                    self.unlock_story_fragment()
+
+            self.player.damage_taken_this_wave = False
+
+            if not self.wave_system.get_next_wave():
+                self.victory = True
+            else:
+                self.enemies_spawned = {}
+                self.showing_wave_transition = True
+                self.wave_transition_timer = self.transition_duration
+                wave_info = self.wave_system.get_current_wave_info()
+                self.next_wave_name = wave_info["name"] if wave_info else f"Oleada {self.wave_system.wave_number}"
+            return  # Esperar transición
+
+        # Factor de tiempo lento
+        time_factor = 0.5 if self.player.slow_time else 1.0
+
+        # Spawnear enemigos
         self.spawn_enemies()
-        
+
         # Actualizar enemigos
         for enemy in self.enemies[:]:
             if isinstance(enemy, MarkovEnemy):
@@ -325,50 +353,42 @@ class GameManager:
                 enemy.think_and_act(self.player, self)
             else:
                 enemy.update()
-            
-            # Aplicar factor de tiempo lento
+
             if not isinstance(enemy, BossFinalAgent):
-                if self.player.slow_time:
-                    enemy.y += 0.5 * time_factor
-                else:
-                    enemy.y += 0.5
-            
-            # NUEVO: Verificar si enemigos alcanzan las colonias
+                enemy.y += 0.5 * time_factor
+
             if enemy.y > SCREEN_HEIGHT - 100 and not isinstance(enemy, BossFinalAgent):
                 self.enemies.remove(enemy)
-                # Diferentes daños según el tipo de enemigo
                 if isinstance(enemy, MarkovEnemy):
                     self.damage_colony(15)
                 else:
                     self.damage_colony(10)
-        
+
         # Actualizar power-ups
         for power_up in self.power_ups[:]:
             power_up.update()
             if power_up.y > SCREEN_HEIGHT:
                 self.power_ups.remove(power_up)
-        
-        # Colisiones con drones del jefe final
+
+        # Drones del jefe
         for enemy in self.enemies:
             if isinstance(enemy, BossFinalAgent):
                 boss = enemy
                 drones_to_remove = []
                 bullets_to_remove = []
-                
-                # Actualizar drones del jefe
+
                 for drone in boss.spawned_drones[:]:
                     if drone.y > SCREEN_HEIGHT - 100:
                         boss.spawned_drones.remove(drone)
-                        # Los drones del jefe también dañan las colonias
                         self.damage_colony(8)
-                
+
                 for drone in boss.spawned_drones:
                     for bullet in self.player.bullets:
                         if hasattr(drone, "rect") and hasattr(bullet, "rect"):
                             if drone.rect.colliderect(bullet.rect):
                                 drones_to_remove.append(drone)
                                 bullets_to_remove.append(bullet)
-                
+
                 for drone in drones_to_remove:
                     if drone in boss.spawned_drones:
                         boss.spawned_drones.remove(drone)
@@ -376,13 +396,14 @@ class GameManager:
                         if powerup_type:
                             powerup = PowerUp(drone.x, drone.y, powerup_type)
                             self.power_ups.append(powerup)
-                
+
                 for bullet in bullets_to_remove:
                     if bullet in self.player.bullets:
                         self.player.bullets.remove(bullet)
 
         # Verificar colisiones
         self.collision_system.check_all_collisions()
+
     
     def handle_events(self, events):
         """Manejar eventos del juego"""
@@ -503,6 +524,16 @@ class GameManager:
             if isinstance(enemy, BossFinalAgent):
                 enemy._draw_health_bar(self.screen)
                 enemy._draw_status_text(self.screen)
+        # Mostrar transición de oleada
+        if self.showing_wave_transition:
+            transition_text = self.font.render(f"Iniciando: {self.next_wave_name}", True, CYAN)
+            text_rect = transition_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+            
+            overlay = pygame.Surface((text_rect.width + 40, text_rect.height + 20))
+            overlay.set_alpha(180)
+            overlay.fill(BLACK)
+            self.screen.blit(overlay, (text_rect.x - 20, text_rect.y - 10))
+            self.screen.blit(transition_text, text_rect)
         
         # Mensaje de pausa
         if self.paused:
