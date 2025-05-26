@@ -3,8 +3,8 @@ Configuraciones del juego Nebula Uprising
 """
 
 # Configuración de pantalla
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 650
+SCREEN_HEIGHT = 1000
 FPS = 60
 
 # Configuración del jugador
@@ -18,7 +18,7 @@ DRONE_SPEED = 2
 DRONE_SIZE = 30
 MARKOV_SPEED = 3
 MARKOV_SIZE = 35
-BOSS_HEALTH = 70
+BOSS_HEALTH = 300
 BOSS_WIDTH = 80
 BOSS_HEIGHT = 60
 

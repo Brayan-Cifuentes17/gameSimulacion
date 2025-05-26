@@ -152,84 +152,116 @@ class BossFinalAgent(Entity):
         self.speed = 2
         self.xarn_core_active = True
         self.corruption_level = 0
-    
+        # NUEVO: Lista de drones y temporizador
+        self.spawned_drones = []
+        self.drone_spawn_timer = 0
+        self.drone_spawn_interval = 180  # cada 3 segundos aprox (60 FPS)
+
     def think_and_act(self, player, game_state):
-            """Sistema de decisión basado en el contexto"""
-            player_distance = abs(self.x - player.x)
-            health_percentage = self.health / self.max_health
-            
-            #Verificar si el jefe llegó a la posición del jugador o muy abajo
-            if self.y >= player.y - 50:  # Si el jefe está muy cerca o debajo del jugador
-                # El jefe ha alcanzado las colonias - GAME OVER
-                game_state.game_over = True
-                game_state.narrative_system.queue_message("colony_breached")
-                return
-            
-            # Verificar si el jefe está muy abajo en la pantalla
-            if self.y >= SCREEN_HEIGHT - 150:
-                # El jefe está peligrosamente cerca de las colonias
-                game_state.game_over = True
-                game_state.narrative_system.queue_message("colony_breached")
-                return
-            
-            # Cambiar comportamiento según el contexto
-            if health_percentage < 0.3:
-                self.behavior_state = "aggressive"
-                self.speed = 6
-                # En modo agresivo, el jefe también avanza hacia abajo
-                self.y += 0.5
-            elif health_percentage < 0.6:
-                self.behavior_state = "balanced"
-                self.speed = 5
-                # Avance moderado
-                self.y += 0.3
+        """Sistema de decisión basado en el contexto"""
+        player_distance = abs(self.x - player.x)
+        health_percentage = self.health / self.max_health
+        
+        #Verificar si el jefe llegó a la posición del jugador o muy abajo
+        if self.y >= player.y - 50:  # Si el jefe está muy cerca o debajo del jugador
+            # El jefe ha alcanzado las colonias - GAME OVER
+            game_state.game_over = True
+            game_state.narrative_system.queue_message("colony_breached")
+            return
+        
+        # Verificar si el jefe está muy abajo en la pantalla
+        if self.y >= SCREEN_HEIGHT - 150:
+            # El jefe está peligrosamente cerca de las colonias
+            game_state.game_over = True
+            game_state.narrative_system.queue_message("colony_breached")
+            return
+        
+        # Cambiar comportamiento según el contexto
+        if health_percentage < 0.3:
+            self.behavior_state = "aggressive"
+            self.speed = 6
+            # En modo agresivo, el jefe también avanza hacia abajo
+            self.y += 0.5
+        elif health_percentage < 0.6:
+            self.behavior_state = "balanced"
+            self.speed = 5
+            # Avance moderado
+            self.y += 0.3
+        else:
+            self.behavior_state = "defensive"
+            self.speed = 3
+            # Avance lento
+            self.y += 0.1
+        
+        # Movimiento inteligente horizontal
+        if self.behavior_state == "aggressive":
+            # Perseguir al jugador
+            if player.x < self.x:
+                self.x -= self.speed
             else:
-                self.behavior_state = "defensive"
-                self.speed = 3
-                # Avance lento
-                self.y += 0.1
-            
-            # Movimiento inteligente horizontal
-            if self.behavior_state == "aggressive":
-                # Perseguir al jugador
+                self.x += self.speed
+        elif self.behavior_state == "defensive":
+            # Mantener distancia
+            if player_distance < 200:
                 if player.x < self.x:
-                    self.x -= self.speed
-                else:
                     self.x += self.speed
-            elif self.behavior_state == "defensive":
-                # Mantener distancia
-                if player_distance < 200:
-                    if player.x < self.x:
-                        self.x += self.speed
-                    else:
-                        self.x -= self.speed
-                        
-            # Limitar posición del jefe dentro de la pantalla
-            self.x = max(0, min(self.x, SCREEN_WIDTH - self.width))
-            
-            # Sistema de ataque
-            self.attack_timer += 1
-            attack_frequency = 120 if self.behavior_state == "defensive" else 60
-            
-            if self.attack_timer >= attack_frequency:
-                self.launch_missile(player)
-                self.attack_timer = 0
-            
-            # Actualizar misiles
-            for missile in self.missiles[:]:
-                missile.update(player)
-                if missile.y > SCREEN_HEIGHT:
-                    self.missiles.remove(missile)
-            
-            # Aumentar corrupción con el tiempo
-            self.corruption_level = min(100, self.corruption_level + 0.1)
-            
-            super().update()
+                else:
+                    self.x -= self.speed
+                    
+        # Limitar posición del jefe dentro de la pantalla
+        self.x = max(0, min(self.x, SCREEN_WIDTH - self.width))
+        
+        # Sistema de ataque
+        self.attack_timer += 1
+        attack_frequency = 120 if self.behavior_state == "defensive" else 60
+        
+        if self.attack_timer >= attack_frequency:
+            self.launch_missile(player)
+            self.attack_timer = 0
+        
+        # Actualizar misiles
+        for missile in self.missiles[:]:
+            missile.update(player)
+            if missile.y > SCREEN_HEIGHT:
+                self.missiles.remove(missile)
+        
+        # NUEVO: Invocar drones cada cierto tiempo
+        self.drone_spawn_timer += 1
+        if self.drone_spawn_timer >= self.drone_spawn_interval:
+            self.spawn_drone()
+            self.drone_spawn_timer = 0
+
+        # Actualizar drones invocados
+        for drone in self.spawned_drones[:]:
+            if isinstance(drone, MarkovEnemy):
+                drone.update(player)
+            else:
+                drone.update()
+            if drone.y > SCREEN_HEIGHT:
+                self.spawned_drones.remove(drone)
+
+        # Aumentar corrupción con el tiempo
+        self.corruption_level = min(100, self.corruption_level + 0.1)
+        
+        super().update()
     
     def launch_missile(self, player):
         """Lanzar misil teledirigido"""
         missile = HomingMissile(self.x + self.width // 2, self.y + self.height, player)
         self.missiles.append(missile)
+    
+    def spawn_drone(self):
+        """Invoca un dron aliado (básico o Markov) en una posición aleatoria cerca del jefe"""
+        from entities.enemies import DroneEnemy, MarkovEnemy  # Importación local para evitar ciclos
+        spawn_x = int(self.x + self.width // 2 + random.randint(-60, 60))
+        spawn_x = max(0, min(spawn_x, SCREEN_WIDTH - DRONE_SIZE))
+        spawn_y = int(self.y + self.height + 10)
+        # 50% de probabilidad de invocar cada tipo
+        if random.random() < 0.5:
+            drone = DroneEnemy(spawn_x, spawn_y)
+        else:
+            drone = MarkovEnemy(spawn_x, spawn_y)
+        self.spawned_drones.append(drone)
     
     def draw(self, screen):
         """Dibujar jefe final con diseño del núcleo XARN"""
@@ -256,6 +288,10 @@ class BossFinalAgent(Entity):
         # Dibujar misiles
         for missile in self.missiles:
             missile.draw(screen)
+
+        # Dibujar drones invocados
+        for drone in self.spawned_drones:
+            drone.draw(screen)
     
     def _draw_health_bar(self, screen):
         """Dibujar barra de vida del jefe"""
