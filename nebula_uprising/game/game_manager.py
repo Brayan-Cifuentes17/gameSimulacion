@@ -267,6 +267,26 @@ class GameManager:
             if power_up.y > SCREEN_HEIGHT:
                 self.power_ups.remove(power_up)
         
+        # --- NUEVO: Colisiones con drones del jefe final ---
+        for enemy in self.enemies:
+            if isinstance(enemy, BossFinalAgent):
+                boss = enemy
+                drones_to_remove = []
+                bullets_to_remove = []
+                for drone in boss.spawned_drones:
+                    for bullet in self.player.bullets:
+                        if hasattr(drone, "rect") and hasattr(bullet, "rect"):
+                            if drone.rect.colliderect(bullet.rect):
+                                drones_to_remove.append(drone)
+                                bullets_to_remove.append(bullet)
+                for drone in drones_to_remove:
+                    if drone in boss.spawned_drones:
+                        boss.spawned_drones.remove(drone)
+                for bullet in bullets_to_remove:
+                    if bullet in self.player.bullets:
+                        self.player.bullets.remove(bullet)
+        # --- FIN NUEVO ---
+
         # Verificar colisiones
         self.collision_system.check_all_collisions()
     
