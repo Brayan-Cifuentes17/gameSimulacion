@@ -32,9 +32,9 @@ class NebulaUprisingGame:
         self.setup_audio()
     
     def setup_audio(self):
-        """Configurar audio del juego (opcional)"""
+        """Configurar audio del juego ()"""
         # pygame.mixer.init()
-        # Aquí puedes cargar música y efectos de sonido
+        # Aquí se peude cargar música y efectos de sonido
         pass
     
     def run(self):

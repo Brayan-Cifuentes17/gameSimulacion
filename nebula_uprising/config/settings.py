@@ -4,7 +4,7 @@ Configuraciones del juego Nebula Uprising
 
 # Configuración de pantalla
 SCREEN_WIDTH = 650
-SCREEN_HEIGHT = 1000
+SCREEN_HEIGHT = 800
 FPS = 60
 
 # Configuración del jugador

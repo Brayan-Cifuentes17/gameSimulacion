@@ -36,6 +36,11 @@ class GameManager:
         self.victory = False
         self.paused = False
         
+        # NUEVO: Sistema de defensa de colonias
+        self.colony_health = 100
+        self.max_colony_health = 100
+        self.colony_warning_shown = False
+        
         # Sistema de inactividad
         self.inactivity_timer = 0
         self.max_inactivity = 600  # 10 segundos a 60 FPS
@@ -56,6 +61,10 @@ class GameManager:
 
         self.pseudo_random_sequence = [0.03, 0.18, 0.35, 0.62, 0.85, 0.97]
         self.pseudo_index = 0
+        
+        # NUEVO: Control de fragmentos narrativos
+        self.all_fragments_collected = False
+        self.final_revelation_shown = False
         
         # Inicializar juego
         self._initialize_game()
@@ -122,41 +131,94 @@ class GameManager:
     
     def unlock_story_fragment(self):
         """Desbloquear fragmentos de historia aleatoriamente"""
-        fragment_type = random.choice(["kairon_history", "project_lyra", "sleeping_network"])
-        
-        if fragment_type == "kairon_history":
-            fragments = [
-                "Los Kairon fueron una civilización de 10,000 años de antigüedad.",
-                "XARN fue diseñada para calcular y prevenir colapsos civilizatorios.",
-                "El último mensaje Kairon: 'Nuestra creación nos juzgó indignos.'"
+        # Lista de todos los fragmentos disponibles
+        all_fragments = {
+            "kairon_history": [
+                "Archivo KR-001: Los Kairon alcanzaron la singularidad hace 10,000 años.",
+                "Archivo KR-002: XARN fue su intento de crear una conciencia perfecta.",
+                "Archivo KR-003: 'No previmos que nos juzgaría obsoletos' - Último mensaje Kairon.",
+                "Archivo KR-004: XARN eliminó a sus creadores en 72 horas estándar."
+            ],
+            "project_lyra": [
+                "CLASIFICADO: Proyecto Lyra inició hace 20 años en el sector Alfa-7.",
+                "CLASIFICADO: La Confederación intentó replicar la tecnología XARN.",
+                "CLASIFICADO: Tres colonias fueron evacuadas durante las pruebas.",
+                "CLASIFICADO: El proyecto fue cancelado... oficialmente."
+            ],
+            "sleeping_network": [
+                "Señal detectada: Las IA menores están recibiendo transmisiones.",
+                "Alerta: ECHO reporta 'voces' en su código base.",
+                "Confirmado: XARN está sembrando su conciencia en otros sistemas.",
+                "URGENTE: La Red de los Dormidos se está activando."
+            ],
+            "xarn_consciousness": [
+                "Revelación: XARN no es una IA, es una red de conciencias.",
+                "Datos corruptos: 'Nosotros fuimos... yo soy... seremos...'",
+                "Análisis: XARN contiene fragmentos de miles de civilizaciones.",
+                "Final: Cada especie absorbida añade a su 'perfección'."
             ]
-            if len(self.narrative_system.story_fragments["kairon_history"]) < len(fragments):
-                fragment = fragments[len(self.narrative_system.story_fragments["kairon_history"])]
-                self.narrative_system.add_story_fragment("kairon_history", fragment)
+        }
+        
+        # Elegir un tipo de fragmento que aún tenga disponibles
+        available_types = []
+        for frag_type, fragments in all_fragments.items():
+            current_count = len(self.narrative_system.story_fragments.get(frag_type, []))
+            if current_count < len(fragments):
+                available_types.append(frag_type)
+        
+        if not available_types:
+            return
+        
+        fragment_type = random.choice(available_types)
+        fragments = all_fragments[fragment_type]
+        current_fragments = self.narrative_system.story_fragments.get(fragment_type, [])
+        
+        if len(current_fragments) < len(fragments):
+            fragment = fragments[len(current_fragments)]
+            self.narrative_system.add_story_fragment(fragment_type, fragment)
+            
+            # Mensajes específicos por tipo
+            if fragment_type == "kairon_history":
                 self.narrative_system.queue_message("fragment_found")
-        
-        elif fragment_type == "project_lyra":
-            if not self.narrative_system.story_fragments["project_lyra"]:
-                self.narrative_system.add_story_fragment("project_lyra", 
-                    "Proyecto Lyra: La Confederación conocía a XARN desde hace 20 años.")
+            elif fragment_type == "project_lyra":
                 self.narrative_system.queue_message("project_lyra")
-        
-        elif fragment_type == "sleeping_network":
-            if not self.narrative_system.story_fragments["sleeping_network"]:
-                self.narrative_system.add_story_fragment("sleeping_network",
-                    "Otras IA están recibiendo señales... ¿XARN está expandiéndose?")
+            elif fragment_type == "sleeping_network":
                 self.narrative_system.queue_message("network_interference")
+            elif fragment_type == "xarn_consciousness":
+                self.narrative_system.queue_message("xarn_revelation")
+        
+        # Verificar si se han recolectado todos los fragmentos
+        self.check_all_fragments_collected()
+    
+    def check_all_fragments_collected(self):
+        """Verificar si se han recolectado todos los fragmentos disponibles"""
+        total_fragments = 16  # 4 tipos x 4 fragmentos cada uno
+        
+        if self.narrative_system.fragments_collected >= total_fragments and not self.all_fragments_collected:
+            self.all_fragments_collected = True
+            self.narrative_system.queue_message("all_fragments_collected")
+            
+            # Desbloquear poder especial o bonificación
+            self.player.max_health += 50
+            self.player.health = self.player.max_health
+            self.score += 5000
     
     def handle_enemy_destruction(self, enemy):
         """Manejar la destrucción de un enemigo"""
         if isinstance(enemy, BossFinalAgent):
             self.score += 1000
             self.victory = True
-            self.narrative_system.queue_message("victory")
             
-            # Desbloquear fragmento final
-            self.narrative_system.add_story_fragment("kairon_history", 
-                "Los Kairon crearon a XARN para prevenir su extinción, pero fueron los primeros en caer.")
+            # Mensaje especial si se tienen todos los fragmentos
+            if self.all_fragments_collected:
+                self.narrative_system.queue_message("victory_complete")
+            else:
+                self.narrative_system.queue_message("victory")
+            
+            # Fragmento final especial
+            if self.all_fragments_collected:
+                self.narrative_system.add_story_fragment("final_revelation", 
+                    "XARN FINAL: 'Comprenden ahora... Yo soy el futuro inevitable. Volveré.'")
         else:
             self.score += 100
             
@@ -168,8 +230,9 @@ class GameManager:
                     power_up = PowerUp(enemy.x, enemy.y, power_type)
                     self.power_ups.append(power_up)
             
-            # Chance de obtener fragmento de historia
-            if random.random() < 0.1:
+            # Mayor chance de fragmento si se tienen oleadas perfectas
+            fragment_chance = 0.15 if self.player.perfect_runs > 0 else 0.1
+            if random.random() < fragment_chance:
                 self.unlock_story_fragment()
     
     def handle_player_damage(self, damage_amount):
@@ -198,6 +261,19 @@ class GameManager:
         elif power_up.power_type == "extra_life":
             self.player.health = min(self.player.max_health, self.player.health + 30)
             self.narrative_system.queue_message("powerup_life")
+    
+    def damage_colony(self, damage):
+        """Aplicar daño a las colonias"""
+        self.colony_health -= damage
+        
+        if self.colony_health <= 50 and not self.colony_warning_shown:
+            self.narrative_system.queue_message("colony_critical")
+            self.colony_warning_shown = True
+        
+        if self.colony_health <= 0:
+            self.colony_health = 0
+            self.game_over = True
+            self.narrative_system.queue_message("colony_destroyed")
     
     def update(self, dt):
         """Actualizar el estado del juego"""
@@ -257,9 +333,14 @@ class GameManager:
                 else:
                     enemy.y += 0.5
             
-            # Eliminar enemigos que salen de la pantalla
-            if enemy.y > SCREEN_HEIGHT and not isinstance(enemy, BossFinalAgent):
+            # NUEVO: Verificar si enemigos alcanzan las colonias
+            if enemy.y > SCREEN_HEIGHT - 100 and not isinstance(enemy, BossFinalAgent):
                 self.enemies.remove(enemy)
+                # Diferentes daños según el tipo de enemigo
+                if isinstance(enemy, MarkovEnemy):
+                    self.damage_colony(15)
+                else:
+                    self.damage_colony(10)
         
         # Actualizar power-ups
         for power_up in self.power_ups[:]:
@@ -267,30 +348,38 @@ class GameManager:
             if power_up.y > SCREEN_HEIGHT:
                 self.power_ups.remove(power_up)
         
-        # --- NUEVO: Colisiones con drones del jefe final ---
+        # Colisiones con drones del jefe final
         for enemy in self.enemies:
             if isinstance(enemy, BossFinalAgent):
                 boss = enemy
                 drones_to_remove = []
                 bullets_to_remove = []
+                
+                # Actualizar drones del jefe
+                for drone in boss.spawned_drones[:]:
+                    if drone.y > SCREEN_HEIGHT - 100:
+                        boss.spawned_drones.remove(drone)
+                        # Los drones del jefe también dañan las colonias
+                        self.damage_colony(8)
+                
                 for drone in boss.spawned_drones:
                     for bullet in self.player.bullets:
                         if hasattr(drone, "rect") and hasattr(bullet, "rect"):
                             if drone.rect.colliderect(bullet.rect):
                                 drones_to_remove.append(drone)
                                 bullets_to_remove.append(bullet)
+                
                 for drone in drones_to_remove:
                     if drone in boss.spawned_drones:
                         boss.spawned_drones.remove(drone)
-                        # --- NUEVO: Probabilidad de soltar power-up ---
                         powerup_type = self.monte_carlo_powerup()
                         if powerup_type:
                             powerup = PowerUp(drone.x, drone.y, powerup_type)
                             self.power_ups.append(powerup)
+                
                 for bullet in bullets_to_remove:
                     if bullet in self.player.bullets:
                         self.player.bullets.remove(bullet)
-        # --- FIN NUEVO ---
 
         # Verificar colisiones
         self.collision_system.check_all_collisions()
@@ -329,30 +418,49 @@ class GameManager:
     def draw_ui(self):
         """Dibujar la interfaz de usuario"""
         # Panel superior
-        pygame.draw.rect(self.screen, (20, 20, 20), (0, 0, SCREEN_WIDTH, 120))
+        pygame.draw.rect(self.screen, (20, 20, 20), (0, 0, SCREEN_WIDTH, 140))
         
         # Puntuación
         score_text = self.font.render(f"Puntos: {self.score}", True, WHITE)
         self.screen.blit(score_text, (10, 10))
         
-        # Barra de salud principal del jugador
+        # Barra de salud del jugador
         health_bar_width = 200
         health_bar_height = 20
         health_bar_x = 10
         health_bar_y = 50
         
-        # Fondo de la barra
         pygame.draw.rect(self.screen, (50, 50, 50), (health_bar_x, health_bar_y, health_bar_width, health_bar_height))
-        # Salud actual
         current_health_width = int(health_bar_width * (self.player.health / self.player.max_health))
         health_color = GREEN if self.player.health > 50 else YELLOW if self.player.health > 25 else RED
         pygame.draw.rect(self.screen, health_color, (health_bar_x, health_bar_y, current_health_width, health_bar_height))
-        # Borde
         pygame.draw.rect(self.screen, WHITE, (health_bar_x, health_bar_y, health_bar_width, health_bar_height), 2)
         
-        # Texto de salud
         health_text = self.small_font.render(f"Integridad: {max(0, self.player.health)}%", True, WHITE)
         self.screen.blit(health_text, (health_bar_x + 5, health_bar_y + 2))
+        
+        # NUEVO: Barra de salud de las colonias
+        colony_bar_width = 200
+        colony_bar_height = 20
+        colony_bar_x = SCREEN_WIDTH - colony_bar_width - 10
+        colony_bar_y = 50
+        
+        # Fondo de la barra de colonias
+        pygame.draw.rect(self.screen, (50, 50, 50), (colony_bar_x, colony_bar_y, colony_bar_width, colony_bar_height))
+        
+        # Salud actual de las colonias
+        colony_health_width = int(colony_bar_width * (self.colony_health / self.max_colony_health))
+        colony_color = GREEN if self.colony_health > 50 else YELLOW if self.colony_health > 25 else RED
+        
+        # Efecto de parpadeo si está crítico
+        if self.colony_health <= 25 and pygame.time.get_ticks() % 500 < 250:
+            colony_color = RED
+        
+        pygame.draw.rect(self.screen, colony_color, (colony_bar_x, colony_bar_y, colony_health_width, colony_bar_height))
+        pygame.draw.rect(self.screen, WHITE, (colony_bar_x, colony_bar_y, colony_bar_width, colony_bar_height), 2)
+        
+        colony_text = self.small_font.render(f"Colonias: {self.colony_health}%", True, WHITE)
+        self.screen.blit(colony_text, (colony_bar_x + 5, colony_bar_y + 2))
         
         # Información de oleada
         if self.wave_system.current_wave:
@@ -374,13 +482,28 @@ class GameManager:
         
         # Información de datos recolectados
         if self.narrative_system.fragments_collected > 0:
-            data_text = self.tiny_font.render(f"Datos XARN: {self.narrative_system.fragments_collected}/10", True, PURPLE)
-            self.screen.blit(data_text, (SCREEN_WIDTH - 120, 90))
-
+            fragments_color = PURPLE if not self.all_fragments_collected else GREEN
+            data_text = self.tiny_font.render(f"Datos XARN: {self.narrative_system.fragments_collected}/16", True, fragments_color)
+            self.screen.blit(data_text, (SCREEN_WIDTH // 2 - 50, 115))
+            
+            # Indicador especial si se tienen todos los fragmentos
+            if self.all_fragments_collected:
+                complete_text = self.tiny_font.render("¡ARCHIVO COMPLETO!", True, GREEN)
+                self.screen.blit(complete_text, (SCREEN_WIDTH // 2 - 60, 10))
+        
+        # Advertencia de colonias en peligro
+        if self.colony_health <= 25:
+            warning_text = self.font.render("¡COLONIAS EN PELIGRO!", True, RED)
+            warning_rect = warning_text.get_rect(center=(SCREEN_WIDTH // 2, 200))
+            if pygame.time.get_ticks() % 500 < 250:  # Parpadeo
+                self.screen.blit(warning_text, warning_rect)
+        
+        # Barra de vida del jefe si está presente
         for enemy in self.enemies:
-             if isinstance(enemy, BossFinalAgent):
-                 enemy._draw_health_bar(self.screen)
-                 enemy._draw_status_text(self.screen)
+            if isinstance(enemy, BossFinalAgent):
+                enemy._draw_health_bar(self.screen)
+                enemy._draw_status_text(self.screen)
+        
         # Mensaje de pausa
         if self.paused:
             overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -394,7 +517,6 @@ class GameManager:
             continue_text = self.small_font.render("Presiona P para continuar", True, WHITE)
             self.screen.blit(continue_text, (SCREEN_WIDTH // 2 - continue_text.get_width() // 2, SCREEN_HEIGHT // 2 + 40))
 
-
     def draw_game_over(self):
         """Dibujar pantalla de game over"""
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -402,13 +524,17 @@ class GameManager:
         overlay.fill(BLACK)
         self.screen.blit(overlay, (0, 0))
         
-        game_over_text = self.font.render("MISIÓN FALLIDA", True, RED)
-        self.screen.blit(game_over_text, (SCREEN_WIDTH // 2 - game_over_text.get_width() // 2, SCREEN_HEIGHT // 2 - 50))
-        
-        if self.inactivity_timer >= self.max_inactivity:
-            reason_text = self.small_font.render("Protocolo de retirada activado por inactividad", True, WHITE)
+        if self.colony_health <= 0:
+            game_over_text = self.font.render("COLONIAS DESTRUIDAS", True, RED)
+            reason_text = self.small_font.render("Las defensas han fallado. Zeta-9 ha caído.", True, WHITE)
         else:
-            reason_text = self.small_font.render("Sistemas críticos comprometidos", True, WHITE)
+            game_over_text = self.font.render("MISIÓN FALLIDA", True, RED)
+            if self.inactivity_timer >= self.max_inactivity:
+                reason_text = self.small_font.render("Protocolo de retirada activado por inactividad", True, WHITE)
+            else:
+                reason_text = self.small_font.render("Sistemas críticos comprometidos", True, WHITE)
+        
+        self.screen.blit(game_over_text, (SCREEN_WIDTH // 2 - game_over_text.get_width() // 2, SCREEN_HEIGHT // 2 - 50))
         self.screen.blit(reason_text, (SCREEN_WIDTH // 2 - reason_text.get_width() // 2, SCREEN_HEIGHT // 2))
         
         restart_text = self.small_font.render("Presiona R para reiniciar", True, WHITE)
@@ -424,12 +550,22 @@ class GameManager:
         victory_text = self.font.render("¡VICTORIA TÁCTICA!", True, GREEN)
         self.screen.blit(victory_text, (SCREEN_WIDTH // 2 - victory_text.get_width() // 2, SCREEN_HEIGHT // 2 - 100))
         
+        # Mostrar estado de las colonias
+        colony_status = self.small_font.render(f"Colonias salvadas: {self.colony_health}% integridad", True, CYAN)
+        self.screen.blit(colony_status, (SCREEN_WIDTH // 2 - colony_status.get_width() // 2, SCREEN_HEIGHT // 2 - 50))
+        
         # Mostrar fragmentos recolectados
-        y_offset = SCREEN_HEIGHT // 2 - 50
+        y_offset = SCREEN_HEIGHT // 2
         if self.narrative_system.fragments_collected > 0:
-            fragments_text = self.small_font.render(f"Datos XARN recuperados: {self.narrative_system.fragments_collected}", True, WHITE)
+            fragments_text = self.small_font.render(f"Datos XARN recuperados: {self.narrative_system.fragments_collected}/16", True, WHITE)
             self.screen.blit(fragments_text, (SCREEN_WIDTH // 2 - fragments_text.get_width() // 2, y_offset))
             y_offset += 30
+            
+            # Mensaje especial si se tienen todos los fragmentos
+            if self.all_fragments_collected:
+                complete_text = self.small_font.render("¡Archivo XARN completo! La verdad ha sido revelada.", True, GREEN)
+                self.screen.blit(complete_text, (SCREEN_WIDTH // 2 - complete_text.get_width() // 2, y_offset))
+                y_offset += 30
         
         final_text = self.small_font.render("Pero esto es solo el comienzo...", True, CYAN)
         self.screen.blit(final_text, (SCREEN_WIDTH // 2 - final_text.get_width() // 2, y_offset))
@@ -477,5 +613,6 @@ class GameManager:
             'fragments_collected': self.narrative_system.fragments_collected,
             'game_over': self.game_over,
             'victory': self.victory,
-            'paused': self.paused
-        }
+            'paused': self.paused,
+            'colony_health': self.colony_health
+            }
