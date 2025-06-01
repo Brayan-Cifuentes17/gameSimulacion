@@ -11,6 +11,7 @@ from entities.base import Entity
 from entities.projectiles import Bullet, HomingMissile
 from config.settings import *
 from config.colors import *
+import os
 
 # Estados para Cadenas de Markov
 class EnemyState(Enum):
@@ -35,6 +36,31 @@ class DroneEnemy(Entity):
         self.move_timer = 0
         self.move_interval = random.randint(30, 60)
         self.enemy_type = "drone_tonto"
+        # Estado actual del dron (solo deambular para el dron básico)
+        self.current_state = "deambular"
+        
+        # Cargar imágenes para todos los estados
+        self.images = {}
+        self.load_images()
+    
+    def load_images(self):
+        """Cargar las imágenes para todos los estados del dron"""
+        image_paths = {
+            "deambular": os.path.join("nebula_uprising", "assets", "images", "Drones", "Enemigo1.png"),
+            "atacar": os.path.join("nebula_uprising", "assets", "images", "Drones", "Enemigo1Atacar.png"),
+            "patrullar": os.path.join("nebula_uprising", "assets", "images", "Drones", "Enemigo1Patrullando.png")
+        }
+        
+        for state, path in image_paths.items():
+            try:
+                image = pygame.image.load(path)
+                # Escalar la imagen 80% más grande que el tamaño original del dron
+                new_width = int(self.width * 3.0)
+                new_height = int(self.height * 3.0)
+                self.images[state] = pygame.transform.scale(image, (new_width, new_height))
+            except pygame.error as e:
+                print(f"No se pudo cargar la imagen {path}: {e}")
+                self.images[state] = None
     
     def update(self):
         """Actualizar comportamiento del dron"""
@@ -47,27 +73,35 @@ class DroneEnemy(Entity):
         
         self.x += self.direction * self.speed
         
-        # Mantener dentro de la pantalla
+        # Mantener dentro de la pantalla con margen de 50 píxeles
         if self.x <= 0 or self.x >= SCREEN_WIDTH - self.width:
             self.direction *= -1
         
         super().update()
     
     def draw(self, screen):
-        """Dibujar dron con diseño hexagonal"""
-        center_x = self.x + self.width // 2
-        center_y = self.y + self.height // 2
-        size = self.width // 2
-        
-        points = []
-        for i in range(6):
-            angle = math.pi / 3 * i
-            x = center_x + size * math.cos(angle)
-            y = center_y + size * math.sin(angle)
-            points.append((x, y))
-        
-        pygame.draw.polygon(screen, self.color, points)
-        pygame.draw.polygon(screen, RED, points, 2)
+        """Dibujar dron con imagen según su estado o diseño hexagonal como respaldo"""
+        current_image = self.images.get(self.current_state)
+        if current_image:
+            # Centrar la imagen más grande en la posición original del dron
+            image_rect = current_image.get_rect()
+            image_rect.center = (self.x + self.width // 2, self.y + self.height // 2)
+            screen.blit(current_image, image_rect)
+        else:
+            # Diseño hexagonal como respaldo si no se puede cargar la imagen
+            center_x = self.x + self.width // 2
+            center_y = self.y + self.height // 2
+            size = self.width // 2
+            
+            points = []
+            for i in range(6):
+                angle = math.pi / 3 * i
+                x = center_x + size * math.cos(angle)
+                y = center_y + size * math.sin(angle)
+                points.append((x, y))
+            
+            pygame.draw.polygon(screen, self.color, points)
+            pygame.draw.polygon(screen, RED, points, 2)
 
 class MarkovEnemy(Entity):
     """Enemigo con comportamiento basado en Cadenas de Markov"""
@@ -76,11 +110,35 @@ class MarkovEnemy(Entity):
         super().__init__(x, y, MARKOV_SIZE, MARKOV_SIZE, MARKOV_COLOR)
         self.state = EnemyState.DEAMBULAR
         self.speed = MARKOV_SPEED
+        self.direction = random.choice([-1, 1])  # AGREGADO: atributo direction faltante
         self.state_timer = 0
         self.state_duration = 60
         self.target_x = x
         self.bullets = []
         self.enemy_type = "drone_bravo"
+        
+        # Cargar imágenes para todos los estados
+        self.images = {}
+        self.load_images()
+    
+    def load_images(self):
+        """Cargar las imágenes para todos los estados del enemigo Markov"""
+        image_paths = {
+            EnemyState.DEAMBULAR: os.path.join("nebula_uprising", "assets", "images", "Drones", "Enemigo2.png"),
+            EnemyState.ATACAR: os.path.join("nebula_uprising", "assets", "images", "Drones", "Enemigo2Atacar.png"),
+            EnemyState.PATRULLAR: os.path.join("nebula_uprising", "assets", "images", "Drones", "Enemigo2Patrullando.png")
+        }
+        
+        for state, path in image_paths.items():
+            try:
+                image = pygame.image.load(path)
+                # Escalar la imagen 80% más grande que el tamaño original del enemigo
+                new_width = int(self.width * 3.0)
+                new_height = int(self.height * 3.0)
+                self.images[state] = pygame.transform.scale(image, (new_width, new_height))
+            except pygame.error as e:
+                print(f"No se pudo cargar la imagen {path}: {e}")
+                self.images[state] = None
     
     def change_state(self):
         """Cambiar estado usando matriz de transición"""
@@ -98,9 +156,10 @@ class MarkovEnemy(Entity):
         
         # Comportamiento según estado
         if self.state == EnemyState.DEAMBULAR:
-            # Movimiento aleatorio suave
+            # Movimiento aleatorio suave con límites
             if random.random() < 0.02:
-                self.target_x = random.randint(0, SCREEN_WIDTH - self.width)
+                MARGIN = 50
+                self.target_x = random.randint(MARGIN, SCREEN_WIDTH - self.width - MARGIN)
             
             if abs(self.x - self.target_x) > 5:
                 self.x += (self.target_x - self.x) * 0.05
@@ -121,24 +180,29 @@ class MarkovEnemy(Entity):
             if bullet.y > SCREEN_HEIGHT:
                 self.bullets.remove(bullet)
 
-        # Mantener dentro de los límites de la pantalla
-        self.x = max(0, min(self.x, SCREEN_WIDTH - self.width))
+        # Mantener dentro de los límites de la pantalla con margen
+        if self.x <= 0:
+            self.x = 0
+            self.direction = 1
+        elif self.x >= SCREEN_WIDTH - self.width:
+            self.x = SCREEN_WIDTH - self.width
+            self.direction = -1
 
         super().update()
         
     def draw(self, screen):
-        """Dibujar enemigo Markov con indicador de estado"""
-        super().draw(screen)
+        """Dibujar enemigo Markov con imagen según su estado"""
+        current_image = self.images.get(self.state)
+        if current_image:
+            # Centrar la imagen más grande en la posición original del enemigo
+            image_rect = current_image.get_rect()
+            image_rect.center = (self.x + self.width // 2, self.y + self.height // 2)
+            screen.blit(current_image, image_rect)
+        else:
+            # Dibujar rectángulo como respaldo si no se puede cargar la imagen
+            super().draw(screen)
         
-        # Indicador visual del estado
-        state_colors = {
-            EnemyState.DEAMBULAR: BLUE,
-            EnemyState.PATRULLAR: YELLOW,
-            EnemyState.ATACAR: RED
-        }
-        pygame.draw.circle(screen, state_colors[self.state], 
-                         (self.x + self.width // 2, self.y - 10), 5)
-        
+        # Dibujar las balas
         for bullet in self.bullets:
             bullet.draw(screen)
 
@@ -159,6 +223,23 @@ class BossFinalAgent(Entity):
         self.spawned_drones = []
         self.drone_spawn_timer = 0
         self.drone_spawn_interval = 180  # cada 3 segundos aprox (60 FPS)
+        
+        # Cargar imagen del jefe final
+        self.image = None
+        self.load_image()
+
+    def load_image(self):
+        """Cargar la imagen del jefe final"""
+        try:
+            image_path = os.path.join("nebula_uprising", "assets", "images", "Drones", "FinalBoss.png")
+            self.image = pygame.image.load(image_path)
+            # Escalar la imagen 80% más grande que el tamaño original del jefe
+            new_width = int(self.width * 5.0)
+            new_height = int(self.height * 5.0)
+            self.image = pygame.transform.scale(self.image, (new_width, new_height))
+        except pygame.error as e:
+            print(f"No se pudo cargar la imagen del BossFinalAgent: {e}")
+            self.image = None
 
     def think_and_act(self, player, game_state):
         """Sistema de decisión basado en el contexto"""
@@ -268,20 +349,27 @@ class BossFinalAgent(Entity):
         self.spawned_drones.append(drone)
     
     def draw(self, screen):
-        """Dibujar jefe final con diseño del núcleo XARN"""
-        center_x = self.x + self.width // 2
-        center_y = self.y + self.height // 2
-        
-        # Núcleo central
-        pygame.draw.circle(screen, self.color, (center_x, center_y), 30)
-        pygame.draw.circle(screen, PURPLE, (center_x, center_y), 30, 3)
-        
-        # Anillos rotatorios
-        angle = pygame.time.get_ticks() / 100
-        for i in range(3):
-            offset_x = math.cos(angle + i * 2.094) * 20
-            offset_y = math.sin(angle + i * 2.094) * 20
-            pygame.draw.circle(screen, ORANGE, (int(center_x + offset_x), int(center_y + offset_y)), 8)
+        """Dibujar jefe final con imagen o diseño del núcleo XARN como respaldo"""
+        if self.image:
+            # Centrar la imagen más grande en la posición original del jefe
+            image_rect = self.image.get_rect()
+            image_rect.center = (self.x + self.width // 2, self.y + self.height // 2)
+            screen.blit(self.image, image_rect)
+        else:
+            # Diseño del núcleo XARN como respaldo si no se puede cargar la imagen
+            center_x = self.x + self.width // 2
+            center_y = self.y + self.height // 2
+            
+            # Núcleo central
+            pygame.draw.circle(screen, self.color, (center_x, center_y), 30)
+            pygame.draw.circle(screen, PURPLE, (center_x, center_y), 30, 3)
+            
+            # Anillos rotatorios
+            angle = pygame.time.get_ticks() / 100
+            for i in range(3):
+                offset_x = math.cos(angle + i * 2.094) * 20
+                offset_y = math.sin(angle + i * 2.094) * 20
+                pygame.draw.circle(screen, ORANGE, (int(center_x + offset_x), int(center_y + offset_y)), 8)
         
         # Barra de vida
         self._draw_health_bar(screen)
