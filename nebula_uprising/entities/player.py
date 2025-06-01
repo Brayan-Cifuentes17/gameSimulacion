@@ -12,7 +12,6 @@ from config.colors import *
 class Player(Entity):
     """Clase del jugador principal"""
     
-    
     def __init__(self, x, y):
         super().__init__(x, y, PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_COLOR)
         self.speed = PLAYER_SPEED
@@ -26,9 +25,8 @@ class Player(Entity):
         self.perfect_runs = 0
         self.damage_taken_this_wave = False
 
-           # Cargar sprites
+        # Cargar sprites
         self.sprite_idle = pygame.image.load(os.path.join("nebula_uprising", "assets", "images", "Nave", "Nave2.png")).convert_alpha()
-
         self.sprite_moving = pygame.image.load(os.path.join("nebula_uprising", "assets", "images", "Nave", "Nave2Movimiento.png")).convert_alpha()
         self.current_sprite = self.sprite_idle
 
@@ -36,7 +34,19 @@ class Player(Entity):
         self.sprite_idle = pygame.transform.scale(self.sprite_idle, (self.width, self.height))
         self.sprite_moving = pygame.transform.scale(self.sprite_moving, (self.width, self.height))
 
-        self.is_moving = False  
+        self.is_moving = False
+        
+        # Cargar sonidos
+        try:
+            self.shoot_sound = pygame.mixer.Sound(os.path.join("nebula_uprising", "assets", "Sonido", "DisparosSFX.mp3"))
+            self.power_sound = pygame.mixer.Sound(os.path.join("nebula_uprising", "assets", "Sonido", "PoderSFX.mp3"))
+            # Ajustar volúmenes
+            self.shoot_sound.set_volume(0.3)  # Reducir volumen del disparo
+            self.power_sound.set_volume(0.7)  # Volumen moderado para poderes
+        except pygame.error as e:
+            print(f"Error cargando sonidos: {e}")
+            self.shoot_sound = None
+            self.power_sound = None
     
     def move_left(self):
         """Mover jugador hacia la izquierda"""
@@ -54,11 +64,14 @@ class Player(Entity):
         """Disparar una bala"""
         bullet = Bullet(self.x + self.width // 2 - 2, self.y, -BULLET_SPEED)
         self.bullets.append(bullet)
+        
+        # Reproducir sonido de disparo
+        if self.shoot_sound:
+            self.shoot_sound.play()
     
     def update(self):
         """Actualizar estado del jugador"""
         super().update()
-
         
         # Actualizar power-ups
         if self.shield_duration > 0:
@@ -78,24 +91,12 @@ class Player(Entity):
                 self.bullets.remove(bullet)
     
     def draw(self, screen):
-            # Cambiar sprite si se está moviendo
+        """Dibujar jugador en pantalla"""
+        # Cambiar sprite si se está moviendo
         self.current_sprite = self.sprite_moving if self.is_moving else self.sprite_idle
         screen.blit(self.current_sprite, (self.x, self.y))
 
         self.is_moving = False
-        """Dibujar jugador en pantalla"""
-
-        # Dibujar nave con diseño mejorado
-        #points = [
-          #  (self.x + self.width // 2, self.y),
-          #  (self.x + self.width, self.y + self.height),
-          #  (self.x + self.width // 2, self.y + self.height - 10),
-           # (self.x, self.y + self.height)
-      #  ]
-      #  pygame.draw.polygon(screen, self.color, points)
-        
-        # Detalles de la nave
-        #pygame.draw.circle(screen, CYAN, (self.x + self.width // 2, self.y + self.height // 2), 5)
         
         # Escudo visual
         if self.shield:
@@ -150,3 +151,8 @@ class Player(Entity):
         """Activar tiempo lento"""
         self.slow_time = True
         self.slow_time_duration = SLOW_TIME_DURATION
+    
+    def play_power_sound(self):
+        """Reproducir sonido de poder (para uso externo)"""
+        if self.power_sound:
+            self.power_sound.play()
