@@ -10,6 +10,46 @@ import os
 from config.settings import SCREEN_WIDTH, SCREEN_HEIGHT, FPS
 from game.game_manager import GameManager
 
+class SoundManager:
+    def __init__(self):
+        """Gestor de sonidos del juego"""
+        self.sounds = {}
+        self.load_sounds()
+    
+    def load_sounds(self):
+        """Cargar todos los efectos de sonido"""
+        try:
+            # Sonido para obtener poder
+            power_sound_path = os.path.join("nebula_uprising", "assets", "Sonido", "PoderSFX.mp3")
+            if os.path.exists(power_sound_path):
+                self.sounds['power'] = pygame.mixer.Sound(power_sound_path)
+                self.sounds['power'].set_volume(0.8)
+            
+            # Sonido para botones del menú
+            button_sound_path = os.path.join("nebula_uprising", "assets", "Sonido", "BotonMenu.mp3")
+            if os.path.exists(button_sound_path):
+                self.sounds['button'] = pygame.mixer.Sound(button_sound_path)
+                self.sounds['button'].set_volume(0.6)
+                
+        except pygame.error as e:
+            print(f"Error cargando sonidos: {e}")
+    
+    def play_sound(self, sound_name):
+        """Reproducir un sonido específico"""
+        if sound_name in self.sounds:
+            try:
+                self.sounds[sound_name].play()
+            except:
+                pass  # Si hay error, continuar sin sonido
+    
+    def play_power_sound(self):
+        """Reproducir sonido de poder obtenido"""
+        self.play_sound('power')
+    
+    def play_button_sound(self):
+        """Reproducir sonido de botón del menú"""
+        self.play_sound('button')
+
 class StaticBackgroundWithStars:
     def __init__(self, image_path, num_stars=150, star_speed=30):
         """Clase para manejar fondo estático con estrellas animadas"""
@@ -116,8 +156,9 @@ class StaticBackgroundWithStars:
         self.star_speed = new_speed
 
 class ImprovedMenuScreen:
-    def __init__(self, screen):
+    def __init__(self, screen, sound_manager):
         self.screen = screen
+        self.sound_manager = sound_manager
         self.game_started = False
         self.show_story = False
         
@@ -238,8 +279,10 @@ class ImprovedMenuScreen:
                     else:
                         # Verificar clicks en botones
                         if self.start_btn_rect.collidepoint(mouse_pos):
+                            self.sound_manager.play_button_sound()  # Reproducir sonido de botón
                             self.game_started = True
                         elif self.info_btn_rect.collidepoint(mouse_pos):
+                            self.sound_manager.play_button_sound()  # Reproducir sonido de botón
                             self.show_story = True
             
             elif event.type == pygame.KEYDOWN:
@@ -388,9 +431,12 @@ class NebulaUprisingGame:
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("Nebula Uprising - Sector Zeta-9")
 
+        # Inicializar gestor de sonidos
+        self.sound_manager = SoundManager()
+
         # Fondos estáticos con estrellas animadas
         self.menu_background = StaticBackgroundWithStars(
-            os.path.join("nebula_uprising", "assets", "Fondo", "GalaxiaMenu.jpg"),
+            os.path.join("nebula_uprising", "assets", "Fondo", "GalaxiaMenu.jpg"), 
             num_stars=100,  # Menos estrellas para el menú
             star_speed=20   # Velocidad suave para el menú
         )
@@ -403,8 +449,8 @@ class NebulaUprisingGame:
         # Estados del juego
         self.game_state = "MENU"  # MENU, PLAYING, GAME_OVER
         
-        # Inicializar sistemas con nueva interfaz
-        self.menu_screen = ImprovedMenuScreen(self.screen)
+        # Inicializar sistemas con nueva interfaz y sonidos
+        self.menu_screen = ImprovedMenuScreen(self.screen, self.sound_manager)
         self.game_manager = None
         self.clock = pygame.time.Clock()
         
@@ -532,7 +578,10 @@ class NebulaUprisingGame:
 
         # Restaurar velocidad normal de estrellas
         self.game_background.set_star_speed(40)
+        # Crear GameManager normalmente
         self.game_manager = GameManager(self.screen)
+        # Asignar el sound_manager después de crear el GameManager
+        self.game_manager.sound_manager = self.sound_manager
         self.menu_screen.game_started = False
     
     def return_to_menu(self):
