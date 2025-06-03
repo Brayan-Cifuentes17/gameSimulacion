@@ -69,16 +69,24 @@ class DroneEnemy(Entity):
         # Caminata aleatoria
         self.move_timer += 1
         if self.move_timer >= self.move_interval:
-            self.direction = PRNG.next_choice([-1, 1])
+            # Si está cerca de un borde, forzar dirección opuesta
+            margin = 15
+            if self.x <= margin:
+                self.direction = 1  # Forzar movimiento a la derecha
+            elif self.x >= SCREEN_WIDTH - self.width - margin:
+                self.direction = -1  # Forzar movimiento a la izquierda
+            else:
+                # Solo elegir dirección aleatoria si no está cerca de bordes
+                self.direction = PRNG.next_choice([-1, 1])
+            
             self.move_timer = 0
-            self.move_interval = self.move_interval  =int(30 + PRNG.next() * 30)
-
+            self.move_interval = int(30 + PRNG.next() * 30)
         
+        # Mover el dron
         self.x += self.direction * self.speed
         
-        # Mantener dentro de la pantalla con margen de 50 píxeles
-        if self.x <= 0 or self.x >= SCREEN_WIDTH - self.width:
-            self.direction *= -1
+        # Limitar posición dentro de la pantalla
+        self.x = max(0, min(self.x, SCREEN_WIDTH - self.width))
         
         super().update()
     
@@ -156,17 +164,24 @@ class MarkovEnemy(Entity):
         if self.state_timer >= self.state_duration:
             self.change_state()
             self.state_timer = 0
-        
-        # Comportamiento según estado
+# Comportamiento según estado
         if self.state == EnemyState.DEAMBULAR:
-            # Movimiento aleatorio suave con límites
+            
+            MARGIN = 50  
             if random.random() < 0.02:
-                MARGIN = 50
+                # Generar nueva posición objetivo evitando bordes
                 self.target_x = random.randint(MARGIN, SCREEN_WIDTH - self.width - MARGIN)
             
+            # Mover hacia el objetivo
             if abs(self.x - self.target_x) > 5:
                 self.x += (self.target_x - self.x) * 0.05
-        
+            
+            # Si está atascado en un borde, alejarse
+            if self.x <= 20:
+                self.target_x = random.randint(100, SCREEN_WIDTH - self.width - MARGIN)
+            elif self.x >= SCREEN_WIDTH - self.width - 20:
+                self.target_x = random.randint(MARGIN, SCREEN_WIDTH - self.width - 100)
+
         elif self.state == EnemyState.PATRULLAR:
             # Movimiento horizontal
             self.x += math.sin(self.state_timer * 0.05) * self.speed
@@ -176,6 +191,7 @@ class MarkovEnemy(Entity):
             if self.state_timer % 30 == 0:
                 bullet = Bullet(self.x + self.width // 2, self.y + self.height, 5)
                 self.bullets.append(bullet)
+
         
         # Actualizar balas
         for bullet in self.bullets[:]:

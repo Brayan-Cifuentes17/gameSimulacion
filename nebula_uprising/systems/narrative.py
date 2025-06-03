@@ -91,8 +91,8 @@ class NarrativeSystem:
             # Cargar cuadro de diálogo
             self.dialog_box = pygame.image.load(os.path.join(ui_path, "Aviso2Echo.png")).convert_alpha()
             
-            # Escalar imágenes de Echo - MUY PEQUEÑAS para no interrumpir
-            echo_scale = 0.5
+            # Escalar imágenes de Echo - MUY PEQUEÑO
+            echo_scale = 0.08  # Mucho más pequeño
             new_echo_width = int(self.echo_normal.get_width() * echo_scale)
             new_echo_height = int(self.echo_normal.get_height() * echo_scale)
             
@@ -100,10 +100,12 @@ class NarrativeSystem:
             self.echo_problem = pygame.transform.scale(self.echo_problem, (new_echo_width, new_echo_height))
             
             # Escalar cuadro de diálogo - muy pequeño
-            dialog_scale = 0.3  # Aún más pequeño
+            dialog_scale = 0.3
             new_dialog_width = int(self.dialog_box.get_width() * dialog_scale)
             new_dialog_height = int(self.dialog_box.get_height() * dialog_scale)
             self.dialog_box = pygame.transform.scale(self.dialog_box, (new_dialog_width, new_dialog_height))
+            
+            print(f"Echo images loaded successfully. Echo size: {new_echo_width}x{new_echo_height}")
             
         except pygame.error as e:
             print(f"Error cargando imágenes de Echo: {e}")
@@ -228,28 +230,40 @@ class NarrativeSystem:
             return
         
         # Seleccionar imagen de Echo según el tipo de mensaje
-        # EchoProblema SOLO para alertas y código rojo
         if self.current_message_type in ["alert", "code_red"]:
             echo_image = self.echo_problem
         else:
             echo_image = self.echo_normal
         
-        # Dibujar Echo con animación suave muy sutil
-        echo_bob = int(2 * math.sin(self.echo_animation_timer / 40))  # Animación más sutil
-        echo_pos = (self.echo_x, self.echo_y + echo_bob)
-        screen.blit(echo_image, echo_pos)
-        
-        # Crear una copia del cuadro de diálogo con transparencia del 50%
+        # Crear una copia del cuadro de diálogo con transparencia
         dialog_transparent = self.dialog_box.copy()
-        dialog_transparent.set_alpha(128)  # 128 = 50% de transparencia (255 es opaco, 0 es invisible)
+        dialog_transparent.set_alpha(128)
         
-        # Dibujar cuadro de diálogo con transparencia
+        # Dibujar cuadro de diálogo
         screen.blit(dialog_transparent, (self.dialog_x, self.dialog_y))
         
-        # Preparar texto para dibujar con fuente más pequeña
+        # DIBUJAR ECHO AL LADO DERECHO DEL CUADRO DE DIÁLOGO
+        # Posición de Echo: a la derecha del cuadro, centrado verticalmente
+        echo_x_pos = self.dialog_x + self.dialog_box.get_width() - echo_image.get_width() - 10  # Cerca del borde derecho
+        echo_y_pos = self.dialog_y + self.dialog_box.get_height() - 5
+        
+        # Aplicar animación sutil
+        echo_bob = int(1.5 * math.sin(self.echo_animation_timer / 40))  # Animación muy sutil
+        echo_final_pos = (echo_x_pos, echo_y_pos + echo_bob)
+        
+        # Dibujar Echo
+        screen.blit(echo_image, echo_final_pos)
+        
+        # Efecto de brillo para mensajes críticos
+        if self.current_message_type in ["alert", "code_red"] and int(self.alert_blink_timer) % 60 < 30:
+            echo_glow = echo_image.copy()
+            echo_glow.set_alpha(100)
+            screen.blit(echo_glow, (echo_final_pos[0] - 1, echo_final_pos[1] - 1))
+        
+        # Dibujar texto
         self.draw_wrapped_text(screen, font, self.current_message)
         
-        # Agregar indicador de tipo de mensaje (más pequeño)
+        # Dibujar indicador de tipo de mensaje
         self.draw_message_indicator(screen, font)
     
     def draw_wrapped_text(self, screen, font, text):
