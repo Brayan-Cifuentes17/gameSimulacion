@@ -6,6 +6,7 @@ import pygame
 import random
 import math
 import numpy as np
+from utils.random_loader import PseudoRandom
 from enum import Enum
 from entities.base import Entity
 from entities.projectiles import Bullet, HomingMissile
@@ -13,6 +14,7 @@ from config.settings import *
 from config.colors import *
 import os
 
+PRNG = PseudoRandom("nebula_uprising/data/pseudo_random_sequence.csv")
 # Estados para Cadenas de Markov
 class EnemyState(Enum):
     DEAMBULAR = 0
@@ -31,10 +33,10 @@ class DroneEnemy(Entity):
     
     def __init__(self, x, y):
         super().__init__(x, y, DRONE_SIZE, DRONE_SIZE, DRONE_COLOR)
-        self.direction = random.choice([-1, 1])
+        self.direction = PRNG.next_choice([-1, 1])
         self.speed = DRONE_SPEED
         self.move_timer = 0
-        self.move_interval = random.randint(30, 60)
+        self.move_interval = int(30 + PRNG.next() * 30)
         self.enemy_type = "drone_tonto"
         # Estado actual del dron (solo deambular para el dron básico)
         self.current_state = "deambular"

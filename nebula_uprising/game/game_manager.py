@@ -9,13 +9,14 @@ from entities.powerups import PowerUp
 from systems.narrative import NarrativeSystem
 from systems.waves import WaveQueue
 from systems.collision import CollisionSystem
+from utils.random_loader import PseudoRandom
 
 class GameManager:
     """
     Clase principal que maneja el flujo del juego Nebula Uprising.
     Coordina todos los sistemas y entidades del juego.
     """
-    
+       
     def __init__(self, screen):
         self.screen = screen
         self.clock = pygame.time.Clock()
@@ -61,12 +62,11 @@ class GameManager:
         self.tiny_font = pygame.font.Font(None, 18)
         
         # Monte Carlo para power-ups
+        self.prng = PseudoRandom("nebula_uprising/data/pseudo_random_sequence.csv")
         self.powerup_types = ["slow_time", "shield", "extra_life", "none"]
         self.powerup_probabilities = [0.15, 0.20, 0.10, 0.55]
         self.powerup_cumulative = np.cumsum(self.powerup_probabilities)
 
-        self.pseudo_random_sequence = [0.03, 0.18, 0.35, 0.62, 0.85, 0.97]
-        self.pseudo_index = 0
         
         #Control de fragmentos narrativos
         self.all_fragments_collected = False
@@ -84,11 +84,8 @@ class GameManager:
     
     def monte_carlo_powerup(self):
         """Determina power-up usando secuencia pseudoaleatoria y matriz acumulativa."""
-        if self.pseudo_index >= len(self.pseudo_random_sequence):
-            self.pseudo_index = 0  # Reiniciar si se acaba la secuencia
-        
-        rand = self.pseudo_random_sequence[self.pseudo_index]
-        self.pseudo_index += 1
+        rand = self.prng.next()
+      
 
         for i, threshold in enumerate(self.powerup_cumulative):
             if rand <= threshold:
