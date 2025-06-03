@@ -69,9 +69,10 @@ class DroneEnemy(Entity):
         # Caminata aleatoria
         self.move_timer += 1
         if self.move_timer >= self.move_interval:
-            self.direction = random.choice([-1, 1])
+            self.direction = PRNG.next_choice([-1, 1])
             self.move_timer = 0
-            self.move_interval = random.randint(30, 60)
+            self.move_interval = self.move_interval  =int(30 + PRNG.next() * 30)
+
         
         self.x += self.direction * self.speed
         
@@ -135,8 +136,8 @@ class MarkovEnemy(Entity):
             try:
                 image = pygame.image.load(path)
                 # Escalar la imagen 80% más grande que el tamaño original del enemigo
-                new_width = int(self.width * 3.0)
-                new_height = int(self.height * 3.0)
+                new_width = int(self.width * 2.0)
+                new_height = int(self.height * 2.0)
                 self.images[state] = pygame.transform.scale(image, (new_width, new_height))
             except pygame.error as e:
                 print(f"No se pudo cargar la imagen {path}: {e}")
@@ -235,9 +236,9 @@ class BossFinalAgent(Entity):
         try:
             image_path = os.path.join("nebula_uprising", "assets", "images", "Drones", "FinalBoss.png")
             self.image = pygame.image.load(image_path)
-            # Escalar la imagen 80% más grande que el tamaño original del jefe
-            new_width = int(self.width * 5.0)
-            new_height = int(self.height * 5.0)
+            # Escalar la imagen  más grande que el tamaño original del jefe
+            new_width = int(self.width * 2.0)
+            new_height = int(self.height * 2.0)
             self.image = pygame.transform.scale(self.image, (new_width, new_height))
         except pygame.error as e:
             print(f"No se pudo cargar la imagen del BossFinalAgent: {e}")
