@@ -62,7 +62,7 @@ class GameManager:
         self.tiny_font = pygame.font.Font(None, 18)
         
         # Monte Carlo para power-ups
-        self.prng = PseudoRandom("nebula_uprising/data/pseudo_random_sequence.csv")
+        self.prng = PseudoRandom(seed=67890)
         self.powerup_types = ["slow_time", "shield", "extra_life", "none"]
         self.powerup_probabilities = [0.15, 0.20, 0.10, 0.55]
         self.powerup_cumulative = np.cumsum(self.powerup_probabilities)

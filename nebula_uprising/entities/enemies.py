@@ -14,7 +14,7 @@ from config.settings import *
 from config.colors import *
 import os
 
-PRNG = PseudoRandom("nebula_uprising/data/pseudo_random_sequence.csv")
+PRNG = PseudoRandom(seed=12345)
 # Estados para Cadenas de Markov
 class EnemyState(Enum):
     DEAMBULAR = 0
@@ -121,7 +121,7 @@ class MarkovEnemy(Entity):
         super().__init__(x, y, MARKOV_SIZE, MARKOV_SIZE, MARKOV_COLOR)
         self.state = EnemyState.DEAMBULAR
         self.speed = MARKOV_SPEED
-        self.direction = random.choice([-1, 1])  # AGREGADO: atributo direction faltante
+        self.direction = random.choice([-1, 1]) 
         self.state_timer = 0
         self.state_duration = 60
         self.target_x = x
@@ -253,8 +253,8 @@ class BossFinalAgent(Entity):
             image_path = os.path.join("nebula_uprising", "assets", "images", "Drones", "FinalBoss.png")
             self.image = pygame.image.load(image_path)
             # Escalar la imagen  más grande que el tamaño original del jefe
-            new_width = int(self.width * 2.0)
-            new_height = int(self.height * 2.0)
+            new_width = int(self.width * 1.0)
+            new_height = int(self.height * 1.0)
             self.image = pygame.transform.scale(self.image, (new_width, new_height))
         except pygame.error as e:
             print(f"No se pudo cargar la imagen del BossFinalAgent: {e}")
@@ -265,7 +265,7 @@ class BossFinalAgent(Entity):
         player_distance = abs(self.x - player.x)
         health_percentage = self.health / self.max_health
         
-        #Verificar si el jefe llegó a la posición del jugador o muy abajo
+        # Verificar si el jefe llegó a la posición del jugador o muy abajo
         if self.y >= player.y - 50:  # Si el jefe está muy cerca o debajo del jugador
             # El jefe ha alcanzado las colonias - GAME OVER
             game_state.game_over = True
@@ -296,32 +296,82 @@ class BossFinalAgent(Entity):
             # Avance lento
             self.y += 0.1
         
-        # Movimiento inteligente horizontal
+        # Usar un patrón sinusoidal para movimiento horizontal constante
+        movement_time = pygame.time.get_ticks() / 1000.0  # Tiempo en segundos
+        
         if self.behavior_state == "aggressive":
-            # Perseguir al jugador
-            if player.x < self.x:
-                self.x -= self.speed
-            else:
-                self.x += self.speed
+            # Movimiento agresivo: zigzag rápido siguiendo al jugador
+            # Combinar persecución con patrón sinusoidal
+            target_x = player.x + (player.width // 2) - (self.width // 2)
+            
+            # Interpolar hacia el jugador con zigzag
+            dx = target_x - self.x
+            self.x += dx * 0.08  # Seguimiento más rápido
+            
+            # Agregar movimiento sinusoidal para zigzag
+            self.x += math.sin(movement_time * 5) * 3
+            
+        elif self.behavior_state == "balanced":
+            # Movimiento balanceado: patrón de figura 8
+            # Centro de la pantalla como punto de referencia
+            center_x = SCREEN_WIDTH // 2 - self.width // 2
+            
+            # Figura 8 horizontal
+            self.x = center_x + math.sin(movement_time * 2) * 150
+            
+            # Pequeño movimiento vertical adicional
+            self.y += math.sin(movement_time * 4) * 0.5
+            
         elif self.behavior_state == "defensive":
-            # Mantener distancia
-            if player_distance < 200:
+            # Movimiento defensivo: patrón circular amplio
+            center_x = SCREEN_WIDTH // 2 - self.width // 2
+            
+            # Movimiento circular
+            radius = 200
+            self.x = center_x + math.cos(movement_time * 1.5) * radius
+            
+            # Si el jugador está muy cerca, alejarse
+            if player_distance < 150:
                 if player.x < self.x:
-                    self.x += self.speed
+                    self.x += self.speed * 2
                 else:
-                    self.x -= self.speed
-                    
-        # Limitar posición del jefe dentro de la pantalla
-        MARGIN = 30 
+                    self.x -= self.speed * 2
+        
+        # NUEVO: Movimiento vertical oscilante
+        # Hacer que el jefe "flote" de manera más natural
+        base_y = self.y
+        float_amplitude = 20
+        float_speed = 3
+        self.y = base_y + math.sin(movement_time * float_speed) * float_amplitude * 0.1
+        
+        # Limitar posición del jefe dentro de la pantalla con márgenes dinámicos
+        MARGIN = 50
+        # Permitir que el jefe use más espacio de la pantalla
         self.x = max(MARGIN, min(self.x, SCREEN_WIDTH - self.width - MARGIN))
         
-        # Sistema de ataque
-        self.attack_timer += 1
-        attack_frequency = 120 if self.behavior_state == "defensive" else 60
+        # Limitar movimiento vertical para que no suba demasiado
+        self.y = max(30, self.y)  # No subir más allá del tope
         
+        # Sistema de ataque mejorado con variación
+        self.attack_timer += 1
+        
+        # Variar la frecuencia de ataque según el estado
+        if self.behavior_state == "aggressive":
+            attack_frequency = 40  # Muy rápido
+        elif self.behavior_state == "balanced":
+            attack_frequency = 80  # Moderado
+        else:
+            attack_frequency = 120  # Lento
+        
+        # Agregar variación aleatoria al ataque
         if self.attack_timer >= attack_frequency:
             self.launch_missile(player)
             self.attack_timer = 0
+            
+            # En modo agresivo, a veces dispara ráfagas
+            if self.behavior_state == "aggressive" and PRNG.next() < 0.3:
+                # Disparo adicional con pequeño retraso
+                self.attack_timer = -20  # Próximo disparo será más rápido
         
         # Actualizar misiles
         for missile in self.missiles[:]:
@@ -329,7 +379,15 @@ class BossFinalAgent(Entity):
             if missile.y > SCREEN_HEIGHT:
                 self.missiles.remove(missile)
         
-        # NUEVO: Invocar drones cada cierto tiempo
+        # NUEVO: Variar el intervalo de spawn de drones según el estado
+        if self.behavior_state == "aggressive":
+            self.drone_spawn_interval = 120  # Más rápido
+        elif self.behavior_state == "balanced":
+            self.drone_spawn_interval = 180  # Normal
+        else:
+            self.drone_spawn_interval = 240  # Más lento
+        
+        # Invocar drones cada cierto tiempo
         self.drone_spawn_timer += 1
         if self.drone_spawn_timer >= self.drone_spawn_interval:
             self.spawn_drone()
