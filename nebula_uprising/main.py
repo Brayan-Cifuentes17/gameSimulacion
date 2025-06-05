@@ -535,6 +535,13 @@ class NebulaUprisingGame:
                 self.game_background.set_star_speed(15)  # Ralentizar estrellas
                 self.game_background.update(dt)
                 
+               
+                # Solo pasamos los eventos al game_manager
+                self.game_manager.handle_events(events)
+                
+                
+                self.game_manager.update(dt)
+                
                 # Dibujar fondo y game manager
                 self.game_background.draw(self.screen)
                 self.game_manager.draw()
@@ -544,21 +551,44 @@ class NebulaUprisingGame:
                     lose_rect = self.menu_screen.lose_image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
                     self.screen.blit(self.menu_screen.lose_image, lose_rect)
                 
-                # Manejar eventos de game over
+                
                 for event in events:
                     if event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
-                            # Volver al menú
-                            self.return_to_menu()
-                        elif event.key == pygame.K_ESCAPE:
-                            # Volver al menú
-                            self.return_to_menu()
+                        # Solo permitir ESCAPE para volver al menú después del delay
+                        if event.key == pygame.K_ESCAPE:
+                            # Verificar si el delay ha terminado antes de permitir escape
+                            delay_finished = False
+                            if self.game_manager.victory and self.game_manager.victory_input_delay <= 0:
+                                delay_finished = True
+                            elif self.game_manager.game_over and self.game_manager.game_over_input_delay <= 0:
+                                delay_finished = True
+                            
+                            if delay_finished:
+                                self.return_to_menu()
+                        
+                        # ENTER también puede volver al menú después del delay
+                        elif event.key == pygame.K_RETURN:
+                            delay_finished = False
+                            if self.game_manager.victory and self.game_manager.victory_input_delay <= 0:
+                                delay_finished = True
+                            elif self.game_manager.game_over and self.game_manager.game_over_input_delay <= 0:
+                                delay_finished = True
+                            
+                            if delay_finished:
+                                self.return_to_menu()
                 
-                # Mostrar instrucción adicional
-                font = pygame.font.Font(None, 24)
-                text = font.render("Presiona ENTER o ESC para volver al menú", True, (255, 255, 255))
-                text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
-                self.screen.blit(text, text_rect)
+                # Mostrar instrucción adicional solo después del delay
+                delay_finished = False
+                if self.game_manager.victory and self.game_manager.victory_input_delay <= 0:
+                    delay_finished = True
+                elif self.game_manager.game_over and self.game_manager.game_over_input_delay <= 0:
+                    delay_finished = True
+                
+                if delay_finished:
+                    font = pygame.font.Font(None, 24)
+                    text = font.render("Presiona ENTER o ESC para volver al menú", True, (255, 255, 255))
+                    text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
+                    self.screen.blit(text, text_rect)
             
             pygame.display.flip()
         

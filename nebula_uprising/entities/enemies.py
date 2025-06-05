@@ -115,7 +115,7 @@ class DroneEnemy(Entity):
             pygame.draw.polygon(screen, RED, points, 2)
 
 class MarkovEnemy(Entity):
-    """Enemigo con comportamiento basado en Cadenas de Markov"""
+    """Enemigo con comportamiento basado en Cadenas de Markov - CORREGIDO"""
     
     def __init__(self, x, y):
         super().__init__(x, y, MARKOV_SIZE, MARKOV_SIZE, MARKOV_COLOR)
@@ -127,6 +127,15 @@ class MarkovEnemy(Entity):
         self.target_x = x
         self.bullets = []
         self.enemy_type = "drone_bravo"
+        
+        # NUEVO: Márgenes de seguridad más estrictos
+        self.MARGIN = 80  # Margen más grande para evitar que se peguen
+        self.MIN_X = self.MARGIN
+        self.MAX_X = SCREEN_WIDTH - self.width - self.MARGIN
+        
+        # Asegurar posición inicial válida
+        self.x = max(self.MIN_X, min(self.x, self.MAX_X))
+        self.target_x = self.x
         
         # Cargar imágenes para todos los estados
         self.images = {}
@@ -159,39 +168,58 @@ class MarkovEnemy(Entity):
         self.state = EnemyState(new_state_index)
     
     def update(self, player):
-        """Actualizar comportamiento del enemigo Markov"""
+        """Actualizar comportamiento del enemigo Markov - CORREGIDO"""
         self.state_timer += 1
         if self.state_timer >= self.state_duration:
             self.change_state()
             self.state_timer = 0
-# Comportamiento según estado
+
+        # COMPORTAMIENTO CORREGIDO según estado
         if self.state == EnemyState.DEAMBULAR:
+            # ARREGLADO: Lógica de deambulación más controlada
+            if random.random() < 0.02:  # Ocasionalmente cambiar objetivo
+                # Generar nueva posición objetivo VÁLIDA
+                self.target_x = random.randint(self.MIN_X, self.MAX_X)
             
-            MARGIN = 50  
-            if random.random() < 0.02:
-                # Generar nueva posición objetivo evitando bordes
-                self.target_x = random.randint(MARGIN, SCREEN_WIDTH - self.width - MARGIN)
+            # Mover gradualmente hacia el objetivo
+            distance_to_target = self.target_x - self.x
+            if abs(distance_to_target) > 5:
+                # Movimiento más controlado - no tan agresivo
+                move_amount = distance_to_target * 0.03  # Reducido de 0.05 a 0.03
+                self.x += move_amount
             
-            # Mover hacia el objetivo
-            if abs(self.x - self.target_x) > 5:
-                self.x += (self.target_x - self.x) * 0.05
-            
-            # Si está atascado en un borde, alejarse
-            if self.x <= 20:
-                self.target_x = random.randint(100, SCREEN_WIDTH - self.width - MARGIN)
-            elif self.x >= SCREEN_WIDTH - self.width - 20:
-                self.target_x = random.randint(MARGIN, SCREEN_WIDTH - self.width - 100)
+            # IMPORTANTE: Verificación de límites después de cada movimiento
+            self._clamp_to_screen_bounds()
 
         elif self.state == EnemyState.PATRULLAR:
-            # Movimiento horizontal
+            # ARREGLADO: Patrullaje con límites estrictos
+            old_x = self.x
+            # Movimiento sinusoidal pero controlado
             self.x += math.sin(self.state_timer * 0.05) * self.speed
             
+            # IMPORTANTE: Verificar límites y revertir si es necesario
+            if self.x < self.MIN_X or self.x > self.MAX_X:
+                self.x = old_x  # Revertir movimiento inválido
+                # Cambiar dirección de patrullaje
+                self.state_timer += 30  # Acelerar cambio de patrón
+            
         elif self.state == EnemyState.ATACAR:
-            # Disparar hacia el jugador
+            # Disparar hacia el jugador sin moverse mucho
             if self.state_timer % 30 == 0:
                 bullet = Bullet(self.x + self.width // 2, self.y + self.height, 5)
                 self.bullets.append(bullet)
-
+            
+            # Movimiento mínimo durante ataque para evitar salirse
+            # Solo moverse si está muy lejos del centro
+            center_screen = SCREEN_WIDTH // 2
+            if abs(self.x - center_screen) > 100:
+                if self.x < center_screen:
+                    self.x += 0.5  # Movimiento muy lento hacia el centro
+                else:
+                    self.x -= 0.5
+            
+            # Verificar límites
+            self._clamp_to_screen_bounds()
         
         # Actualizar balas
         for bullet in self.bullets[:]:
@@ -199,15 +227,42 @@ class MarkovEnemy(Entity):
             if bullet.y > SCREEN_HEIGHT:
                 self.bullets.remove(bullet)
 
-        # Mantener dentro de los límites de la pantalla con margen
-        if self.x <= 0:
-            self.x = 0
-            self.direction = 1
-        elif self.x >= SCREEN_WIDTH - self.width:
-            self.x = SCREEN_WIDTH - self.width
-            self.direction = -1
-
+        # CRÍTICO: Siempre actualizar rectángulo después de mover
         super().update()
+        
+        # DOBLE VERIFICACIÓN: Asegurar que el rectángulo está dentro de los límites
+        self._ensure_rect_validity()
+    
+    def _clamp_to_screen_bounds(self):
+        """NUEVO: Función para asegurar que el enemigo esté dentro de límites seguros"""
+        old_x = self.x
+        self.x = max(self.MIN_X, min(self.x, self.MAX_X))
+        
+        # Si la posición cambió, significa que estaba fuera de límites
+        if old_x != self.x:
+            # Ajustar target_x para evitar que trate de volver al borde
+            if self.x == self.MIN_X:
+                self.target_x = random.randint(self.MIN_X + 50, self.MAX_X)
+            elif self.x == self.MAX_X:
+                self.target_x = random.randint(self.MIN_X, self.MAX_X - 50)
+    
+    def _ensure_rect_validity(self):
+        """NUEVO: Asegurar que el rectángulo de colisión sea válido y esté actualizado"""
+        # Forzar actualización del rectángulo
+        self.update_rect()
+        
+        # Verificar que el rectángulo no esté fuera de pantalla
+        if self.rect.left < 0:
+            self.x = 0
+            self.update_rect()
+        elif self.rect.right > SCREEN_WIDTH:
+            self.x = SCREEN_WIDTH - self.width
+            self.update_rect()
+        
+        # Debug: Verificar que las coordenadas estén sincronizadas
+        if abs(self.rect.x - self.x) > 1 or abs(self.rect.y - self.y) > 1:
+            print(f"ADVERTENCIA: Desincronización detectada - Enemy pos: ({self.x}, {self.y}), Rect pos: ({self.rect.x}, {self.rect.y})")
+            self.update_rect()  # Forzar corrección
         
     def draw(self, screen):
         """Dibujar enemigo Markov con imagen según su estado"""
@@ -220,6 +275,9 @@ class MarkovEnemy(Entity):
         else:
             # Dibujar rectángulo como respaldo si no se puede cargar la imagen
             super().draw(screen)
+        
+        # DEBUG: Dibujar rectángulo de colisión (quitar en versión final)
+        # pygame.draw.rect(screen, (255, 0, 0), self.rect, 2)  # Rectángulo rojo para debug
         
         # Dibujar las balas
         for bullet in self.bullets:
@@ -283,7 +341,7 @@ class BossFinalAgent(Entity):
         if health_percentage < 0.3:
             self.behavior_state = "aggressive"
             self.speed = 6
-            # En modo agresivo, el jefe también avanza hacia abajo
+           
             self.y += 0.5
         elif health_percentage < 0.6:
             self.behavior_state = "balanced"

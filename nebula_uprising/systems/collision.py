@@ -1,6 +1,7 @@
 """
 Sistema de Colisiones - Nebula Uprising
 Maneja todas las detecciones y resoluciones de colisiones
+MODIFICADO para activar correctamente el delay de input en victoria
 """
 
 import pygame
@@ -56,7 +57,7 @@ class CollisionSystem:
                 self._apply_powerup_effect(power_up)
     
     def _handle_enemy_hit(self, enemy):
-        """Manejar cuando un enemigo es golpeado"""
+        """Manejar cuando un enemigo es golpeado - MODIFICADO para delay de victoria"""
         from entities.enemies import BossFinalAgent
         
         if isinstance(enemy, BossFinalAgent):
@@ -65,11 +66,20 @@ class CollisionSystem:
                 self.game.enemies.remove(enemy)
                 self.game.score += 1000
                 self.game.victory = True
-                self.game.narrative_system.queue_message("victory")
                 
-                # Desbloquear fragmento final
-                self.game.narrative_system.add_story_fragment("kairon_history", 
-                    "Los Kairon crearon a XARN para prevenir su extinción, pero fueron los primeros en caer.")
+                # NUEVO: Activar el delay de input para victoria
+                self.game.victory_input_delay = self.game.input_delay_duration
+                
+                # Mensaje especial si se tienen todos los fragmentos
+                if self.game.all_fragments_collected:
+                    self.game.narrative_system.queue_message("victory_complete")
+                else:
+                    self.game.narrative_system.queue_message("victory")
+                
+                # Fragmento final especial
+                if self.game.all_fragments_collected:
+                    self.game.narrative_system.add_story_fragment("final_revelation", 
+                        "XARN FINAL: 'Comprenden ahora... Yo soy el futuro inevitable. Volveré.'")
         else:
             self.game.enemies.remove(enemy)
             self.game.score += 100
@@ -92,7 +102,7 @@ class CollisionSystem:
         return 10 if isinstance(enemy, MarkovEnemy) else 15
     
     def _damage_player(self, damage):
-        """Aplicar daño al jugador"""
+        """Aplicar daño al jugador - MODIFICADO para delay de game over"""
         self.game.player.health -= damage
         self.game.player.damage_taken_this_wave = True
         
@@ -101,6 +111,8 @@ class CollisionSystem:
         
         if self.game.player.health <= 0:
             self.game.game_over = True
+            # NUEVO: Activar el delay de input para game over
+            self.game.game_over_input_delay = self.game.input_delay_duration
             self.game.narrative_system.queue_message("defeat")
     
     def _apply_powerup_effect(self, power_up):

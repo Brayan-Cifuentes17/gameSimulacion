@@ -43,6 +43,11 @@ class GameManager:
         self.victory = False
         self.paused = False
         
+        # NUEVO: Control de input para evitar salir accidentalmente de pantallas finales
+        self.victory_input_delay = 0  # Contador para retrasar la aceptación de input en victoria
+        self.game_over_input_delay = 0  # Lo mismo para game over
+        self.input_delay_duration = 120  # 2 segundos de espera antes de aceptar input (60 FPS * 2)
+        
         #Sistema de defensa de colonias
         self.colony_health = 100
         self.max_colony_health = 100
@@ -83,9 +88,8 @@ class GameManager:
         self.enemies_spawned = {}
     
     def monte_carlo_powerup(self):
-        """Determina power-up usando secuencia pseudoaleatoria y matriz acumulativa."""
+        """Determina power-up usando secuencia pseudoaleatoria generada por LCG" "PRNG"""
         rand = self.prng.next()
-      
 
         for i, threshold in enumerate(self.powerup_cumulative):
             if rand <= threshold:
@@ -216,6 +220,8 @@ class GameManager:
         if isinstance(enemy, BossFinalAgent):
             self.score += 1000
             self.victory = True
+            # NUEVO: Iniciar el delay de input al activar la victoria
+            self.victory_input_delay = self.input_delay_duration
             
             # Mensaje especial si se tienen todos los fragmentos
             if self.all_fragments_collected:
@@ -254,6 +260,8 @@ class GameManager:
             
             if self.player.health <= 0:
                 self.game_over = True
+                # NUEVO: Iniciar el delay de input al activar game over
+                self.game_over_input_delay = self.input_delay_duration
                 self.narrative_system.queue_message("defeat")
     
     def handle_powerup_collection(self, power_up):
@@ -281,6 +289,8 @@ class GameManager:
         if self.colony_health <= 0:
             self.colony_health = 0
             self.game_over = True
+            # NUEVO: Iniciar el delay de input al activar game over
+            self.game_over_input_delay = self.input_delay_duration
             self.narrative_system.queue_message("colony_destroyed")
 
     def all_enemies_spawned(self):
@@ -295,6 +305,13 @@ class GameManager:
     
     def update(self, dt):
         """Actualizar el estado del juego"""
+        # NUEVO: Actualizar contadores de delay de input
+        if self.victory and self.victory_input_delay > 0:
+            self.victory_input_delay -= 1
+        
+        if self.game_over and self.game_over_input_delay > 0:
+            self.game_over_input_delay -= 1
+        
         if self.game_over or self.victory or self.paused:
             return
 
@@ -303,6 +320,8 @@ class GameManager:
             self.inactivity_timer += 1
             if self.inactivity_timer >= self.max_inactivity:
                 self.game_over = True
+                # NUEVO: Iniciar el delay de input
+                self.game_over_input_delay = self.input_delay_duration
                 self.narrative_system.queue_message("inactivity")
         else:
             self.inactivity_timer = 0
@@ -331,6 +350,8 @@ class GameManager:
 
             if not self.wave_system.get_next_wave():
                 self.victory = True
+                # NUEVO: Iniciar el delay de input al activar la victoria
+                self.victory_input_delay = self.input_delay_duration
             else:
                 self.enemies_spawned = {}
                 self.showing_wave_transition = True
@@ -433,15 +454,29 @@ class GameManager:
 
     
     def handle_events(self, events):
-        """Manejar eventos del juego"""
+        """Manejar eventos del juego - MODIFICADO para evitar input accidental"""
         for event in events:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and not (self.game_over or self.victory):
-                    self.player.shoot()
-                elif event.key == pygame.K_p:  # Pausar
-                    self.paused = not self.paused
-                elif event.key == pygame.K_r and (self.game_over or self.victory):  # Reiniciar
-                    self.restart_game()
+                # Durante el juego normal (no en pantallas finales)
+                if not (self.game_over or self.victory):
+                    if event.key == pygame.K_SPACE:
+                        self.player.shoot()
+                    elif event.key == pygame.K_p:  # Pausar
+                        self.paused = not self.paused
+                
+                # En pantallas finales - SOLO aceptar input después del delay
+                elif (self.game_over or self.victory):
+                    # Solo aceptar R para reiniciar después del delay
+                    if event.key == pygame.K_r:
+                        # Para victory: solo después del delay
+                        if self.victory and self.victory_input_delay <= 0:
+                            self.restart_game()
+                        # Para game over: solo después del delay
+                        elif self.game_over and self.game_over_input_delay <= 0:
+                            self.restart_game()
+                    
+                    # ESPACIO YA NO REINICIA EL JUEGO - solo R lo hace
+                    # Esto evita el reinicio accidental cuando se está disparando
     
     def handle_continuous_input(self, keys):
         """Manejar input continuo (teclas presionadas)"""
@@ -575,7 +610,7 @@ class GameManager:
             self.screen.blit(continue_text, (SCREEN_WIDTH // 2 - continue_text.get_width() // 2, SCREEN_HEIGHT // 2 + 40))
 
     def draw_game_over(self):
-        """Dibujar pantalla de game over"""
+        """Dibujar pantalla de game over - MODIFICADO con indicador de delay"""
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         overlay.set_alpha(128)
         overlay.fill(BLACK)
@@ -594,12 +629,20 @@ class GameManager:
         self.screen.blit(game_over_text, (SCREEN_WIDTH // 2 - game_over_text.get_width() // 2, SCREEN_HEIGHT // 2 - 50))
         self.screen.blit(reason_text, (SCREEN_WIDTH // 2 - reason_text.get_width() // 2, SCREEN_HEIGHT // 2))
         
-        restart_text = self.small_font.render("Presiona R para reiniciar", True, WHITE)
-        self.screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, SCREEN_HEIGHT // 2 + 40))
+        # NUEVO: Mostrar mensaje dependiendo del delay
+        if self.game_over_input_delay > 0:
+            # Mientras hay delay, mostrar contador
+            seconds_left = (self.game_over_input_delay // 60) + 1  # +1 para redondear hacia arriba
+            wait_text = self.small_font.render(f"Analizando resultados... {seconds_left}s", True, YELLOW)
+            self.screen.blit(wait_text, (SCREEN_WIDTH // 2 - wait_text.get_width() // 2, SCREEN_HEIGHT // 2 + 40))
+        else:
+            # Después del delay, mostrar instrucciones
+            restart_text = self.small_font.render("Presiona R para reiniciar", True, WHITE)
+            self.screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, SCREEN_HEIGHT // 2 + 40))
     
     
     def draw_victory(self):
-        """Dibujar pantalla de victoria"""
+        """Dibujar pantalla de victoria - MODIFICADO con indicador de delay"""
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         overlay.set_alpha(128)
         overlay.fill(BLACK)
@@ -628,8 +671,20 @@ class GameManager:
         final_text = self.small_font.render("Pero esto es solo el comienzo...", True, CYAN)
         self.screen.blit(final_text, (SCREEN_WIDTH // 2 - final_text.get_width() // 2, y_offset))
         
-        restart_text = self.small_font.render("Presiona R para jugar de nuevo", True, WHITE)
-        self.screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, y_offset + 40))
+        # NUEVO: Mostrar mensaje dependiendo del delay
+        if self.victory_input_delay > 0:
+            # Mientras hay delay, mostrar contador y mensaje especial
+            seconds_left = (self.victory_input_delay // 60) + 1  # +1 para redondear hacia arriba
+            wait_text = self.small_font.render(f"Procesando datos de victoria... {seconds_left}s", True, YELLOW)
+            self.screen.blit(wait_text, (SCREEN_WIDTH // 2 - wait_text.get_width() // 2, y_offset + 40))
+            
+            # Mensaje adicional para que el jugador entienda
+            enjoy_text = self.tiny_font.render("Disfruta tu momento de gloria, Comandante", True, GREEN)
+            self.screen.blit(enjoy_text, (SCREEN_WIDTH // 2 - enjoy_text.get_width() // 2, y_offset + 65))
+        else:
+            # Después del delay, mostrar instrucciones
+            restart_text = self.small_font.render("Presiona R para jugar de nuevo", True, WHITE)
+            self.screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, y_offset + 40))
     
     def draw(self):
         """Dibujar todo en la pantalla (sin el fondo - se maneja externamente)"""
