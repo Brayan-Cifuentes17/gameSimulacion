@@ -82,11 +82,3 @@ class HomingMissile(Entity):
       def draw(self, screen):
             """Dibujar el misil como sprite"""
             screen.blit(self.sprite, (self.x, self.y))
-    
-    #    """Dibujar misil como triángulo apuntando hacia el objetivo"""
-     #   points = [
-      #      (self.x + math.cos(self.angle) * 10, self.y + math.sin(self.angle) * 10),
-       #     (self.x + math.cos(self.angle + 2.5) * 5, self.y + math.sin(self.angle + 2.5) * 5),
-        #    (self.x + math.cos(self.angle - 2.5) * 5, self.y + math.sin(self.angle - 2.5) * 5)
-        #]
-        #pygame.draw.polygon(screen, self.color, points)

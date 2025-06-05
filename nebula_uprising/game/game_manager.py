@@ -64,7 +64,7 @@ class GameManager:
         # Monte Carlo para power-ups
         self.prng = PseudoRandom(seed=67890)
         self.powerup_types = ["slow_time", "shield", "extra_life", "none"]
-        self.powerup_probabilities = [0.15, 0.20, 0.10, 0.55]
+        self.powerup_probabilities = [0.15, 0.10, 0.05, 0.70]
         self.powerup_cumulative = np.cumsum(self.powerup_probabilities)
 
         
@@ -114,7 +114,10 @@ class GameManager:
                 self.enemies.append(boss)
             return
         
-        self.spawn_timer += 1
+        # Aplicar factor de tiempo lento al spawn timer
+        time_factor = 0.3 if self.player.slow_time else 1.0
+        
+        self.spawn_timer += time_factor
         if self.spawn_timer >= wave["spawn_rate"]:
             self.spawn_timer = 0
             
@@ -228,7 +231,7 @@ class GameManager:
             self.score += 100
             
             # Chance de generar power-up
-            drop_chance = 0.3
+            drop_chance = 0.15
             if random.random() < drop_chance:
                 power_type = self.monte_carlo_powerup()
                 if power_type:
@@ -257,7 +260,7 @@ class GameManager:
         """Manejar la recolección de power-ups"""
         if power_up.power_type == "slow_time":
             self.player.slow_time = True
-            self.player.slow_time_duration = 180
+            self.player.slow_time_duration = 300  # Aumentamos la duración
             self.narrative_system.queue_message("powerup_slow")
         elif power_up.power_type == "shield":
             self.player.shield = True
@@ -315,7 +318,6 @@ class GameManager:
         self.player.update()
         self.narrative_system.update(dt)
 
-
         # Comprobación de fin de oleada sin depender de duración
         if len(self.enemies) == 0 and self.all_enemies_spawned():
             # Verificar si fue una oleada perfecta
@@ -337,8 +339,8 @@ class GameManager:
                 self.next_wave_name = wave_info["name"] if wave_info else f"Oleada {self.wave_system.wave_number}"
             return  # Esperar transición
 
-        # Factor de tiempo lento
-        time_factor = 0.5 if self.player.slow_time else 1.0
+        # Factor de tiempo lento más agresivo
+        time_factor = 0.25 if self.player.slow_time else 1.0
 
         # Spawnear enemigos
         self.spawn_enemies()
@@ -346,14 +348,31 @@ class GameManager:
         # Actualizar enemigos
         for enemy in self.enemies[:]:
             if isinstance(enemy, MarkovEnemy):
-                enemy.update(self.player)
+                # Aplicar factor de tiempo a MarkovEnemy
+                if self.player.slow_time:
+                    # Llamar update varias veces con menos frecuencia
+                    if pygame.time.get_ticks() % 4 == 0:  # Solo actualizar cada 4 frames
+                        enemy.update(self.player)
+                else:
+                    enemy.update(self.player)
             elif isinstance(enemy, BossFinalAgent):
-                enemy.think_and_act(self.player, self)
+                # Aplicar factor de tiempo al jefe
+                if self.player.slow_time:
+                    if pygame.time.get_ticks() % 3 == 0:  # Solo actualizar cada 3 frames
+                        enemy.think_and_act(self.player, self)
+                else:
+                    enemy.think_and_act(self.player, self)
             else:
-                enemy.update()
+                # DroneEnemy y otros
+                if self.player.slow_time:
+                    if pygame.time.get_ticks() % 4 == 0:
+                        enemy.update()
+                else:
+                    enemy.update()
 
+            # Movimiento vertical con factor de tiempo más pronunciado
             if not isinstance(enemy, BossFinalAgent):
-                enemy.y += 0.5 * time_factor
+                enemy.y += 1.0 * time_factor  # Aumentamos la velocidad base
 
             if enemy.y > SCREEN_HEIGHT - 100 and not isinstance(enemy, BossFinalAgent):
                 self.enemies.remove(enemy)
@@ -362,13 +381,19 @@ class GameManager:
                 else:
                     self.damage_colony(10)
 
-        # Actualizar power-ups
+        # Actualizar power-ups con factor de tiempo
         for power_up in self.power_ups[:]:
-            power_up.update()
+            # Solo actualizar power-ups si no hay slow time activo, o hacerlo más lento
+            if self.player.slow_time:
+                if pygame.time.get_ticks() % 3 == 0:
+                    power_up.update()
+            else:
+                power_up.update()
+                
             if power_up.y > SCREEN_HEIGHT:
                 self.power_ups.remove(power_up)
 
-        # Drones del jefe
+        # Drones del jefe (aplicar factor de tiempo)
         for enemy in self.enemies:
             if isinstance(enemy, BossFinalAgent):
                 boss = enemy
@@ -376,6 +401,10 @@ class GameManager:
                 bullets_to_remove = []
 
                 for drone in boss.spawned_drones[:]:
+                    # Movimiento de drones más lento durante slow time
+                    drone_speed = 0.5 * time_factor
+                    drone.y += drone_speed
+                    
                     if drone.y > SCREEN_HEIGHT - 100:
                         boss.spawned_drones.remove(drone)
                         self.damage_colony(8)
@@ -484,7 +513,7 @@ class GameManager:
             wave_text = self.small_font.render(wave_name, True, YELLOW)
             self.screen.blit(wave_text, (SCREEN_WIDTH // 2 - wave_text.get_width() // 2, 90))
         
-        # Power-ups activos
+        # Power-ups activos con efecto visual mejorado
         power_y = 10
         if self.player.shield:
             shield_text = self.small_font.render("ESCUDO ACTIVO", True, CYAN)
@@ -492,8 +521,10 @@ class GameManager:
             power_y += 25
         
         if self.player.slow_time:
-            slow_text = self.small_font.render("DISTORSIÓN TEMPORAL", True, BLUE)
-            self.screen.blit(slow_text, (SCREEN_WIDTH - 180, power_y))
+            # Efecto visual más llamativo para slow time
+            slow_color = (100, 150, 255) if pygame.time.get_ticks() % 500 < 250 else (50, 100, 200)
+            slow_text = self.small_font.render("◄ DISTORSIÓN TEMPORAL ►", True, slow_color)
+            self.screen.blit(slow_text, (SCREEN_WIDTH - 200, power_y))
             power_y += 25
         
         # Información de datos recolectados
@@ -565,6 +596,7 @@ class GameManager:
         
         restart_text = self.small_font.render("Presiona R para reiniciar", True, WHITE)
         self.screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, SCREEN_HEIGHT // 2 + 40))
+    
     
     def draw_victory(self):
         """Dibujar pantalla de victoria"""
